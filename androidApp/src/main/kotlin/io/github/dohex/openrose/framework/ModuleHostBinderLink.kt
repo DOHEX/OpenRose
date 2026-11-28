@@ -40,8 +40,6 @@ import io.github.dohex.openrose.bridge.IControlFrames
 import io.github.dohex.openrose.circulation.CirculationCommand
 import io.github.dohex.openrose.circulation.CirculationFailure
 import io.github.dohex.openrose.circulation.CirculationReply
-import io.github.dohex.openrose.ffi.CoreDecodeResult
-import io.github.dohex.openrose.ffi.decodeCirculationReply
 import io.github.dohex.openrose.ffi.encodeToBytes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -51,7 +49,6 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.withTimeoutOrNull
-import uniffi.openrose_circulation.RemoteError
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.EmptyCoroutineContext
@@ -240,16 +237,10 @@ class ModuleHostBinderLink(
                         },
                     )
                 }
-                decodeCirculation(reply.getByteArray(BridgeWire.CIRCULATION))
+                reply.getByteArray(BridgeWire.CIRCULATION).toCirculationReply()
             } catch (failure: HostLinkException) {
                 CirculationFailure(failure.message ?: "互联服务不可用")
             }
-        }
-
-        private fun decodeCirculation(bytes: ByteArray?): CirculationReply = when (val decoded = bytes?.let(::decodeCirculationReply)) {
-            is CoreDecodeResult.Ok -> decoded.value.toClient()
-            is CoreDecodeResult.Error.UnsupportedVersion -> throw HostLinkException(RemoteError.UnsupportedVersion.text())
-            is CoreDecodeResult.Error.Malformed, null -> throw HostLinkException("宿主返回了无法识别的内容")
         }
 
         override suspend fun status(): HostStatus = call({ bridge.ownerStatus(request()) }, HostIdentityWire::decodeStatus)

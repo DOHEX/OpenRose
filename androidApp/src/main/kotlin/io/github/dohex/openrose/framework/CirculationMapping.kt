@@ -1,5 +1,6 @@
 package io.github.dohex.openrose.framework
 
+import io.github.dohex.openrose.androidintegration.HostLinkException
 import io.github.dohex.openrose.circulation.CirculationCommand
 import io.github.dohex.openrose.circulation.CirculationFailure
 import io.github.dohex.openrose.circulation.CirculationReply
@@ -17,7 +18,10 @@ import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.ffi.CoreDecodeResult
 import io.github.dohex.openrose.ffi.EnumNames
+import io.github.dohex.openrose.ffi.decodeCirculationReply
+import uniffi.openrose_circulation.RemoteError
 import uniffi.openrose_circulation.CirculationCommand as RustCommand
 import uniffi.openrose_circulation.CirculationReply as RustReply
 import uniffi.openrose_circulation.HandoffStatus as RustHandoff
@@ -47,11 +51,7 @@ internal fun CirculationCommand.toRust(): RustCommand? = when (this) {
 }
 
 internal fun RustReply.toClient(): CirculationReply = when (this) {
-    is RustReply.Directory -> PeerDirectory(
-        paired = paired.associate { it.id to it.name },
-        nearby = nearby.associate { it.id to it.name },
-        offer = offer?.toClient(),
-    )
+    is RustReply.Directory -> toDirectory()
     is RustReply.Offer -> PairingReply(offer.toClient())
     is RustReply.Paired -> CirculationResult(PAIRED_MESSAGE)
     RustReply.Forgotten -> CirculationResult(FORGOTTEN_MESSAGE)
@@ -60,6 +60,18 @@ internal fun RustReply.toClient(): CirculationReply = when (this) {
     is RustReply.Pulled -> CirculationResult(outcome.text())
     is RustReply.Failed -> CirculationFailure(error.text())
 }
+
+internal fun ByteArray?.toCirculationReply(): CirculationReply = when (val decoded = this?.let(::decodeCirculationReply)) {
+    is CoreDecodeResult.Ok -> decoded.value.toClient()
+    is CoreDecodeResult.Error.UnsupportedVersion -> throw HostLinkException(RemoteError.UnsupportedVersion.text())
+    is CoreDecodeResult.Error.Malformed, null -> throw HostLinkException("宿主返回了无法识别的内容")
+}
+
+private fun RustReply.Directory.toDirectory(): PeerDirectory = PeerDirectory(
+    paired = paired.associate { it.id to it.name },
+    nearby = nearby.associate { it.id to it.name },
+    offer = offer?.toClient(),
+)
 
 private fun HeadsetCommand.toRust(): RustHeadsetCommand? = when (this) {
     is HeadsetCommand.NoiseMode -> RustHeadsetCommand.NoiseMode(rustNoiseModes.of(mode))
