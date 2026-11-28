@@ -695,7 +695,7 @@ export function createHeadsetSettingsModel(controller: HeadsetController): Heads
 
     const coupledFootnote =
       hasAudioMode && hasMultipoint && audioCap?.multipoint_coupled
-        ? "该型号的 LDAC 与多点连接互斥；切换多点时设备会改用 AAC / SBC。"
+        ? "该型号的 LDAC 与多点连接互斥；切换多点时耳机会改用 AAC / SBC。"
         : null;
 
     return {

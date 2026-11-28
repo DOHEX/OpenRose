@@ -35,7 +35,7 @@ import type { MetricItem, SegmentOption, ToneVariant } from "../ui";
 const RECOVERY_REASON_TEXT: Record<TransportRecoveryReason, string> = {
   ServiceDiscovery: "蓝牙服务发现暂不可用",
   ServicesUnavailable: "耳机控制服务尚未就绪",
-  Subscription: "设备状态订阅未完成",
+  Subscription: "耳机状态订阅未完成",
   WriteFailed: "首次状态读取发送未完成",
   ServicesChanged: "耳机的蓝牙服务已变化",
   NoInitialResponse: "首次读取尚未收到可用状态",
@@ -100,7 +100,7 @@ export function modelConfigurationCaption(
   if (!profileId) return null;
   const model = catalogById.get(profileId);
   if (!model) return profileId;
-  return model.versionName ? `${model.versionName} · ${model.familyLabel}` : model.familyLabel;
+  return model.versionName ?? model.shortLabel;
 }
 
 export function transportUnavailableText(
@@ -145,7 +145,7 @@ export function transportUnavailableText(
         detail:
           hostPlatform === "Windows"
             ? "Windows 蓝牙适配器不支持 BLE"
-            : "此设备不支持所需的 BLE 硬件",
+            : "这台音源设备不支持所需的 BLE 硬件",
       };
     case "PermissionRequired":
       return {
@@ -263,7 +263,7 @@ export function firstConnectionHint(hostPlatform: HostPlatform): string {
   if (hostPlatform === "Windows" || hostPlatform === "Linux" || hostPlatform === "MacOs") {
     return "打开耳机并靠近电脑，必要时让耳机进入配对模式。";
   }
-  return "打开耳机并靠近设备，必要时让耳机进入配对模式。";
+  return "打开耳机并靠近音源设备，必要时让耳机进入配对模式。";
 }
 
 export function recoveryReasonLabel(reason: TransportRecoveryReason): string {
@@ -349,7 +349,7 @@ export function fieldReadingDisplay(
     return initializing ? "读取中…" : "尚未读取";
   }
   if (typeof reading === "object") {
-    if ("NotProvided" in reading) return "设备未提供";
+    if ("NotProvided" in reading) return "耳机未提供";
     if ("Unknown" in reading) return "未知";
     if ("Known" in reading) {
       return formatKnownValue(field, reading.Known.value);
