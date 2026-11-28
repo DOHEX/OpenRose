@@ -5,6 +5,13 @@ use std::path::Path;
 const MAX_MAJOR_OR_MINOR: u32 = 255;
 const MAX_PATCH: u32 = 65_535;
 
+pub const SYNCED_FILES: &[&str] = &[
+    "Cargo.toml",
+    "Cargo.lock",
+    "desktop/nsh.json",
+    "desktop/ext/openrose-native",
+];
+
 pub fn check_workspace_version(workspace_root: &Path) -> Result<String, Vec<String>> {
     let expected = match read_version_txt(workspace_root) {
         Ok(version) => version,
