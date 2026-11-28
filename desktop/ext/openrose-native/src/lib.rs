@@ -540,13 +540,18 @@ mod tests {
                 .expect("noise mode change confirmed");
 
             let mut stages = Vec::new();
-            while let Ok(snap) = rx.try_recv() {
-                for op in snap.setting_operations {
-                    stages.push(op.stage);
+            let confirmed = tokio::time::timeout(Duration::from_secs(2), async {
+                while let Some(snap) = rx.recv().await {
+                    stages.extend(snap.setting_operations.into_iter().map(|op| op.stage));
+                    if stages.contains(&SettingStage::Confirmed) {
+                        return true;
+                    }
                 }
-            }
+                false
+            })
+            .await;
+            assert!(matches!(confirmed, Ok(true)), "the confirmed stage reaches the observer");
             assert!(stages.contains(&SettingStage::Submitted));
-            assert!(stages.contains(&SettingStage::Confirmed));
             assert_eq!(
                 runtime
                     .snapshot()
