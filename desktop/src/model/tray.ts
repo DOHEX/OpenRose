@@ -1,12 +1,14 @@
 import type { RemoteHeadsetView } from "./circulation";
-import { noiseModeLabel } from "./headset";
+import { headsetDisplayName, readKnownText } from "./headset";
 import type {
   BatterySlotView,
   ControlSnapshot,
   HeadsetCandidate,
+  HeadsetCommand,
   ModelCatalogEntry,
   NoiseFeedback,
 } from "./headset";
+import { noiseModeLabel } from "./labels";
 
 export const TRAY_APP_NAME = "OpenRose";
 export const TRAY_PANEL_TITLE = "OpenRose 托盘面板";
@@ -21,7 +23,8 @@ export interface TrayHeadsetController {
   connect: (headsetId?: string | null) => Promise<void>;
   disconnect: () => Promise<void>;
   setNoiseMode: (mode: string, expectedSession?: number | null) => Promise<void>;
-  executeCommand: (commandJson: string, expectedSession: number | null) => Promise<void>;
+  executeCommand: (command: HeadsetCommand, expectedSession: number | null) => Promise<void>;
+  currentHeadset: () => HeadsetCandidate | null;
 }
 
 export interface TrayNoiseChoice {
@@ -57,23 +60,6 @@ const BATTERY_SHORT_LABELS: Record<BatterySlotView["id"], string> = {
   unit: "电量",
 };
 
-function targetHeadset(snapshot: ControlSnapshot): HeadsetCandidate | null {
-  if (snapshot.connection_target) return snapshot.connection_target;
-  const selected = snapshot.bonded_headsets.find((item) => item.id === snapshot.selected_headset_id);
-  return selected ?? snapshot.bonded_headsets[0] ?? null;
-}
-
-function headsetName(
-  target: HeadsetCandidate | null,
-  profileId: string | null,
-  catalogById: Map<string, ModelCatalogEntry>,
-): string | null {
-  if (target?.name?.trim()) return target.name;
-  const profile = profileId ?? target?.profile ?? null;
-  if (profile) return catalogById.get(profile)?.displayName ?? profile;
-  return target?.id ?? null;
-}
-
 export function computeTraySummary(
   controller: TrayHeadsetController,
   remoteHolder: RemoteHeadsetView | null = null,
@@ -84,12 +70,12 @@ export function computeTraySummary(
   const headset = snapshot.headset;
   const connected = typeof connection === "object" && "Connected" in connection && headset !== null;
   const connecting = typeof connection === "object" && "Connecting" in connection;
-  const target = targetHeadset(snapshot);
+  const target = controller.currentHeadset();
   const profileId =
     typeof connection === "object" && "Connected" in connection
       ? connection.Connected.profile
       : (headset?.readings.profile ?? null);
-  const name = headsetName(target, profileId, controller.catalogById);
+  const name = headsetDisplayName(target, controller.catalogById, profileId);
   const audioConnected =
     target !== null &&
     snapshot.audio_headset_id !== null &&
@@ -110,12 +96,7 @@ export function computeTraySummary(
 
   const feedback = controller.noiseFeedback();
   const pendingMode = feedback.kind === "in_progress" ? feedback.mode : null;
-  const confirmedMode = headset?.readings.fields.NoiseMode;
-  const confirmed =
-    confirmedMode && typeof confirmedMode === "object" && "Known" in confirmedMode &&
-    "Text" in confirmedMode.Known.value
-      ? confirmedMode.Known.value.Text
-      : null;
+  const confirmed = headset ? readKnownText(headset.readings.fields, "NoiseMode") : null;
   const noiseModes: TrayNoiseChoice[] =
     connected && controller.canControlNoiseMode()
       ? controller.noiseModes().map((mode) => ({

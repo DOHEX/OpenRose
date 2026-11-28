@@ -1,6 +1,8 @@
 import { Storage, signal } from "nsh";
 import { OpenRoseTray } from "openrose-native";
 import type { HeadsetCapabilities } from "./headset";
+import { hasEqualizerPresets } from "./headsetRules";
+import { trayUnavailableLabel } from "./labels";
 
 export type TrayPanelControl = "game_mode" | "equalizer" | "spatial_audio" | "independent_mic";
 
@@ -111,7 +113,7 @@ export function isControlSupported(
     case "game_mode":
       return writable.includes("GameMode");
     case "equalizer":
-      return writable.includes("Eq") && (capabilities.equalizer?.presets.length ?? 0) > 0;
+      return hasEqualizerPresets(capabilities);
     case "spatial_audio":
       return writable.includes("SpatialMode") || writable.includes("SpatialAudio");
     case "independent_mic":
@@ -181,6 +183,9 @@ export function createDesktopSettingsStore(): DesktopSettingsStore {
     whenLoaded,
     backgroundControl: () => settings().backgroundControl,
     trayPanel: () => settings().trayPanel,
+    trayPanelSummary: () => trayPanelSettingsSummary(settings().trayPanel),
+    trayPanelIsDefault: () => isDefaultTrayPanelSettings(settings().trayPanel),
+    controlMeta: (control: TrayPanelControl) => TRAY_PANEL_CONTROL_META[control],
     setBackgroundControl: (enabled: boolean) => update({ ...settings(), backgroundControl: enabled }),
     setShowNoiseLevels: (show: boolean) =>
       update({ ...settings(), trayPanel: { ...settings().trayPanel, showNoiseLevels: show } }),
@@ -199,6 +204,9 @@ export interface DesktopSettingsStore {
   whenLoaded: Promise<void>;
   backgroundControl: () => boolean;
   trayPanel: () => TrayPanelSettings;
+  trayPanelSummary: () => string;
+  trayPanelIsDefault: () => boolean;
+  controlMeta: (control: TrayPanelControl) => TrayPanelControlMeta;
   setBackgroundControl: (enabled: boolean) => void;
   setShowNoiseLevels: (show: boolean) => void;
   setControlEnabled: (control: TrayPanelControl, enabled: boolean) => void;
@@ -219,12 +227,9 @@ export function createTrayAvailabilityStore(): TrayAvailabilityStore {
       const report = OpenRoseTray.checkAvailability() as { available: boolean; reason?: string | null };
       next = report.available
         ? { status: "available" }
-        : { status: "unavailable", reason: report.reason?.trim() || "系统托盘不可用" };
-    } catch (error) {
-      next = {
-        status: "unavailable",
-        reason: error instanceof Error ? error.message : "系统托盘不可用",
-      };
+        : { status: "unavailable", reason: trayUnavailableLabel(report.reason) };
+    } catch {
+      next = { status: "unavailable", reason: trayUnavailableLabel(null) };
     }
     availability.set(next);
     return next;

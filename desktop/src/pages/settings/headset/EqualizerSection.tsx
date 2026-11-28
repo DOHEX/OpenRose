@@ -1,5 +1,4 @@
-import { formatBandHz, formatGainDb } from "../../../model/settings";
-import type { HeadsetSettingsModel } from "../../../model/settings";
+import type { HeadsetSettingsModel } from "../../../ui";
 import {
   ActionButton,
   Card,
@@ -72,8 +71,8 @@ export function EqualizerSection(props: { model: HeadsetSettingsModel }) {
               {(band) => (
                 <SliderField
                   testID={`setting-eq-band-${band().index}`}
-                  label={`${formatBandHz(band().hz)} Hz`}
-                  valueText={formatGainDb(eq().custom!.displayedCurve[band().index] ?? 0)}
+                  label={`${model.formatBandHz(band().hz)} Hz`}
+                  valueText={model.formatGainDb(eq().custom!.displayedCurve[band().index] ?? 0)}
                   value={eq().custom!.displayedCurve[band().index] ?? 0}
                   min={eq().custom!.capabilities.min_gain}
                   max={eq().custom!.capabilities.max_gain}

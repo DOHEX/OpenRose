@@ -1,4 +1,4 @@
-import type { HeadsetSettingsModel } from "../../../model/settings";
+import type { HeadsetSettingsModel } from "../../../ui";
 import { Column, NoticeBanner, StatusBadge } from "../../../ui";
 import { AudioSection } from "./AudioSection";
 import { EqualizerSection } from "./EqualizerSection";

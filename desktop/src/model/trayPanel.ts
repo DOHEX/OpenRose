@@ -1,7 +1,14 @@
 import { signal } from "nsh";
-import { OpenRoseTray } from "openrose-native";
-import { errorCategoryLabel, readKnownNumber, readKnownText, readKnownToggle } from "./headset";
-import type { HeadsetState, SettingOperation } from "./headset";
+import {
+  controlErrorOf,
+  isPendingStage,
+  readKnownNumber,
+  readKnownText,
+  readKnownToggle,
+} from "./headset";
+import type { HeadsetCommand, HeadsetState, SettingOperation } from "./headset";
+import { equalizerPresetLabel, unmetPrerequisites, visibleLevels } from "./headsetRules";
+import { errorCategoryLabel, prerequisiteLabel, semanticLabel, settingLabel } from "./labels";
 import type { TrayHeadsetController, TraySummary } from "./tray";
 import { supportedTrayControls } from "./trayPanelSettings";
 import type { TrayPanelControl, TrayPanelSettings } from "./trayPanelSettings";
@@ -53,27 +60,6 @@ export interface TrayPanelModel {
   commandError: () => string | null;
 }
 
-const PREREQUISITE_TEXT: Record<string, string> = {
-  SpatialModeRequired: "需先开启空间模式",
-  IndependentMicActivationRequired: "需先激活独立麦克风",
-};
-
-const SPATIAL_LABELS: Record<string, string> = {
-  off: "关闭",
-  head_tracking: "头部跟踪",
-  fixed: "固定",
-  tv: "电视",
-  music: "音乐",
-  movie: "电影",
-  game: "游戏",
-};
-
-function spatialLabel(value: string): string {
-  return SPATIAL_LABELS[value] ?? value;
-}
-
-const PENDING_STAGES = ["Submitted", "PartiallyWritten", "Written"];
-
 function pendingOperation(
   operations: SettingOperation[],
   headset: HeadsetState,
@@ -81,9 +67,7 @@ function pendingOperation(
 ): SettingOperation | null {
   const pending = operations.filter(
     (op) =>
-      op.session_id === headset.session_id &&
-      op.setting === setting &&
-      PENDING_STAGES.includes(op.stage),
+      op.session_id === headset.session_id && op.setting === setting && isPendingStage(op.stage),
   );
   return pending.length > 0 ? pending[pending.length - 1] : null;
 }
@@ -95,19 +79,12 @@ export function createTrayPanelModel(
 ): TrayPanelModel {
   const commandError = signal<string | null>(null);
 
-  const run = async (command: Record<string, unknown>, sessionId: number) => {
+  const run = async (command: HeadsetCommand, sessionId: number) => {
     commandError.set(null);
     try {
-      await controller.executeCommand(JSON.stringify(command), sessionId);
+      await controller.executeCommand(command, sessionId);
     } catch (error) {
-      const last = controller.snapshot().last_error;
-      commandError.set(
-        last
-          ? `${errorCategoryLabel(last.code)}：${last.message}`
-          : error instanceof Error
-            ? error.message
-            : String(error),
-      );
+      commandError.set(errorCategoryLabel(controlErrorOf(error).code));
     }
   };
 
@@ -117,11 +94,11 @@ export function createTrayPanelModel(
     spec: { testID: string; label: string; setting: string; field: string },
   ): TrayField => {
     const value = readKnownToggle(headset.readings.fields, spec.field);
-    const prerequisite = OpenRoseTray.settingPrerequisite(headset.readings, spec.setting);
+    const prerequisite = unmetPrerequisites(headset.readings.fields)[spec.setting] ?? null;
     const pending = pendingOperation(operations, headset, spec.setting);
     const pendingValue = pending && "Toggle" in pending.requested_value ? pending.requested_value.Toggle : null;
     const caption = prerequisite
-      ? (PREREQUISITE_TEXT[prerequisite] ?? prerequisite)
+      ? prerequisiteLabel(prerequisite)
       : pendingValue === null
         ? value === null
           ? "当前状态未知"
@@ -171,32 +148,18 @@ export function createTrayPanelModel(
   };
 
   const levelField = (headset: HeadsetState, operations: SettingOperation[]): TrayField | null => {
-    const capabilities = headset.readings.capabilities;
     const mode = readKnownText(headset.readings.fields, "NoiseMode");
-    const control = capabilities.noise_control;
-    if (!control || !mode) return null;
-    const candidates = [
-      { setting: "AncLevel", label: "降噪档位", levels: control.anc_level },
-      { setting: "TransparencyLevel", label: "通透档位", levels: control.transparency_level },
-    ];
-    const match = candidates.find(
-      (candidate) =>
-        capabilities.writable_settings.includes(candidate.setting) &&
-        candidate.levels !== null &&
-        candidate.levels.levels.length > 0 &&
-        candidate.levels.visible_modes.includes(mode),
-    );
-    if (!match || !match.levels) return null;
+    const visible = visibleLevels(headset.readings.capabilities, mode);
+    const match = visible[0] ?? null;
+    if (!match) return null;
     const current = readKnownNumber(headset.readings.fields, match.setting);
     const pending = pendingOperation(operations, headset, match.setting);
     const pendingLevel = pending && "Number" in pending.requested_value ? pending.requested_value.Number : null;
     return {
       kind: "segments",
       testID: `tray-level-${match.setting}`,
-      label: match.label,
-      options: [...match.levels.levels]
-        .sort((a, b) => a - b)
-        .map((level) => ({
+      label: settingLabel(match.setting),
+      options: match.levels.map((level) => ({
           value: String(level),
           label: `${level} 档`,
           testID: `tray-level-${match.setting}-${level}`,
@@ -230,7 +193,7 @@ export function createTrayPanelModel(
     }
     if (control === "equalizer") {
       const profile = headset.readings.profile;
-      const titleOf = (preset: string) => OpenRoseTray.equalizerPresetLabel(profile, preset) ?? preset;
+      const titleOf = (preset: string) => equalizerPresetLabel(profile, preset);
       return [
         selectField(headset, operations, {
           testID: "tray-select-equalizer",
@@ -262,13 +225,13 @@ export function createTrayPanelModel(
           label: "空间模式",
           setting: "SpatialMode",
           field: "SpatialMode",
-          items: capabilities.spatial_modes.map((mode) => ({ value: mode, title: spatialLabel(mode) })),
-          titleOf: spatialLabel,
+          items: capabilities.spatial_modes.map((mode) => ({ value: mode, title: semanticLabel(mode) })),
+          titleOf: semanticLabel,
         }),
       ];
       if (
         writable.includes("SpatialContent") &&
-        OpenRoseTray.settingPrerequisite(headset.readings, "SpatialContent") === null
+        !("SpatialContent" in unmetPrerequisites(headset.readings.fields))
       ) {
         fields.push(
           selectField(headset, operations, {
@@ -278,9 +241,9 @@ export function createTrayPanelModel(
             field: "SpatialContent",
             items: capabilities.spatial_contents.map((item) => ({
               value: item,
-              title: spatialLabel(item),
+              title: semanticLabel(item),
             })),
-            titleOf: spatialLabel,
+            titleOf: semanticLabel,
           }),
         );
       }

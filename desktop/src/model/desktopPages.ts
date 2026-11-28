@@ -1,173 +1,36 @@
 import { signal } from "nsh";
 import { OpenRoseHeadsetFlow } from "openrose-native";
-import type { OpenRoseClient } from "openrose-native";
-import {
-  errorCategoryLabel,
-  noiseModeLabel,
-} from "./headset";
+import { controlErrorOf, headsetDisplayName, isPendingStage } from "./headset";
 import type {
-  ConnectionPhase,
+  ConnectionBlockReason,
   ControlError,
   ControlSnapshot,
   FieldReading,
+  FieldValue,
+  HeadsetController,
+  HostPlatform,
   ModelCatalogEntry,
+  PermissionState,
+  PlatformApplicability,
+  ReconnectGuidance,
   SettingOperation,
   SettingStage,
+  TransportRecoveryReason,
+  TransportSelection,
+  TransportSelectionReason,
+  TransportUnavailableReason,
 } from "./headset";
-export type HostPlatform = "Unknown" | "Android" | "Windows" | "Linux" | "MacOs";
-export type PermissionState = "NotRequired" | "Required" | "Granted" | "Denied";
-export type PlatformApplicability = "Unknown" | "NotApplicable" | "Applicable";
-export type ReconnectGuidance = "OpenCaseAutoConnect" | "WaitSystemBluetooth";
-export type TransportRecoveryReason =
-  | "ServiceDiscovery"
-  | "ServicesUnavailable"
-  | "Subscription"
-  | "WriteFailed"
-  | "ServicesChanged"
-  | "NoInitialResponse";
-export type TransportSelectionReason =
-  | "ModelBleOnly"
-  | "ForcedBle"
-  | "SppUnavailable"
-  | "ClassicAddressUnavailable"
-  | "AudioProfileUnknown"
-  | "LeAudio"
-  | "ClassicAudio";
-
-export type TransportUnavailableReason =
-  | { UnsupportedPlatform: { platform: string | null } }
-  | "BleUnsupported"
-  | "PermissionRequired"
-  | "NoAdapter"
-  | "AdapterPoweredOff"
-  | "AdapterStateUnknown"
-  | "AccessDenied"
-  | "ServiceUnavailable"
-  | { MissingDependency: { detail: string | null } }
-  | "Initializing"
-  | "Recovering"
-  | "ShuttingDown"
-  | "Closed"
-  | { BackendUnavailable: { detail: string | null } };
-
-export type TransportAvailability =
-  | "Available"
-  | "Disabled"
-  | { Unavailable: { reason: TransportUnavailableReason } };
-
-export type ConnectionBlockReason =
-  | "BluetoothPermissionRequired"
-  | "BluetoothDisabled"
-  | { TransportUnavailable: { reason: TransportUnavailableReason } };
-
-export interface PlatformState {
-  permission: PermissionState;
-  transport: TransportAvailability;
-  host_platform: HostPlatform;
-  user_unlocked: boolean;
-  scan_permission: PermissionState;
-  control_transport_applicability: PlatformApplicability;
-}
-
-export interface HeadsetCandidate {
-  id: string;
-  name: string | null;
-  rssi: number | null;
-  profile: string | null;
-  manufacturer_data_hex: string;
-  classic_address: string | null;
-}
-
-export type ScanState = "Idle" | "Scanning" | { Failed: ControlError };
-
-export interface ConnectionRecovery {
-  session_id: number;
-  reason: TransportRecoveryReason;
-}
-
-export type TransportEndpoint =
-  | { BleGatt: { service_uuid: string; write_uuid: string; notify_uuid: string } }
-  | { SppRfcomm: { address: string; service_uuid: string } };
-
-export interface TransportSelection {
-  endpoint: TransportEndpoint;
-  reason: TransportSelectionReason;
-}
-
-export interface HeadsetDiagnostics {
-  field_errors: Record<string, ControlError>;
-  raw_notifications: string[];
-  unknown_notifications: string[];
-  warnings: string[];
-}
-
-export interface ExtendedFieldValue {
-  Number?: number;
-  Toggle?: boolean;
-  Text?: string;
-  IntegerList?: number[];
-  Firmware?: { parts: number[]; display_text: string };
-  TouchKeys?: Array<{ side: string; gesture: string; action: string | null; raw_action: number }>;
-  TouchAssignment?: { side: string; gesture: string; action: string };
-  NoiseCycle?: Record<string, boolean | null>;
-}
-
-export interface ExtendedHeadsetState {
-  headset_id: string;
-  session_id: number;
-  readings: {
-    profile: string;
-    capabilities: {
-      readable_fields: string[];
-      writable_settings: string[];
-      noise_control: {
-        modes: string[];
-        cycle_modes: string[];
-        minimum_cycle_selections: number;
-      } | null;
-    };
-    fields: Record<string, FieldReading>;
-  };
-  diagnostics: HeadsetDiagnostics;
-  classic_address: string | null;
-  transport_selection: TransportSelection | null;
-}
-
-export interface FullControlSnapshot {
-  revision: number;
-  platform: PlatformState;
-  settings: { force_ble: boolean };
-  connection:
-    | "Disconnected"
-    | { Connecting: { headset_id: string; session_id: number; phase: ConnectionPhase } }
-    | { Connected: { headset_id: string; session_id: number; profile: string } };
-  bonded_headsets: HeadsetCandidate[];
-  candidates: HeadsetCandidate[];
-  scan: ScanState;
-  headset: ExtendedHeadsetState | null;
-  last_error: ControlError | null;
-  setting_operations: SettingOperation[];
-  audio_headset_id: string | null;
-  connection_target: HeadsetCandidate | null;
-  selected_headset_id: string | null;
-  connection_recovery: ConnectionRecovery | null;
-  connection_block_reason: ConnectionBlockReason | null;
-  reconnect_guidance: ReconnectGuidance | null;
-}
-
-export interface HeadsetController {
-  client: OpenRoseClient;
-  catalogById: Map<string, ModelCatalogEntry>;
-  snapshot: () => ControlSnapshot;
-}
-
-const PHASE_TEXT: Record<ConnectionPhase, string> = {
-  Connecting: "正在建立蓝牙连接…",
-  Discovering: "正在发现耳机服务…",
-  Subscribing: "正在订阅状态通知…",
-  Initializing: "正在初始化并读取状态…",
-  Ready: "已连接",
-};
+import {
+  connectionPhaseLabel,
+  controlErrorText,
+  controlErrorTitle,
+  errorCategoryLabel,
+  fieldLabel,
+  noiseModeLabel,
+  semanticLabel,
+  settingLabel,
+} from "./labels";
+import type { MetricItem, SegmentOption, ToneVariant } from "../ui";
 
 const RECOVERY_REASON_TEXT: Record<TransportRecoveryReason, string> = {
   ServiceDiscovery: "蓝牙服务发现暂不可用",
@@ -199,102 +62,6 @@ const STAGE_TEXT: Record<SettingStage, string> = {
   Failed: "操作失败",
 };
 
-const FIELD_LABELS: Record<string, string> = {
-  LeftBattery: "左耳电量",
-  RightBattery: "右耳电量",
-  CaseBattery: "充电盒电量",
-  LeftCharging: "左耳充电状态",
-  RightCharging: "右耳充电状态",
-  LeftInCase: "左耳在盒状态",
-  RightInCase: "右耳在盒状态",
-  CaseFlag: "充电盒状态",
-  Firmware: "固件版本",
-  NoiseMode: "降噪模式",
-  Eq: "均衡器模式",
-  EqSlot: "均衡器槽位",
-  GameMode: "游戏模式",
-  AudioMode: "音频编解码",
-  Multipoint: "双设备连接",
-  TouchKeys: "触控按键映射",
-  TapEnabled: "敲击控制开关",
-  TapKeys: "敲击按键映射",
-  TouchEnabled: "触控开关",
-  NoiseCycle: "降噪切换顺序",
-  EarDetection: "佩戴检测",
-  AncLevel: "降噪档位",
-  TransparencyLevel: "通透档位",
-  PromptVolume: "提示音音量",
-  CustomEq: "自定义均衡器曲线",
-  Gain: "低音增强档位",
-  HearingProtection: "听力保护",
-  PromptLanguage: "提示音语言",
-  FindState: "寻机状态",
-  SpatialAudio: "空间音频",
-  HideSearch: "隐藏蓝牙搜索",
-  SpatialMode: "空间音频模式",
-  SpatialContent: "空间音频内容",
-  EarAdaptive: "耳道自适应",
-  IndependentMicActivation: "独立麦克风激活",
-  IndependentMicMode: "独立麦克风模式",
-};
-
-const SETTING_LABELS: Record<string, string> = {
-  NoiseMode: "降噪模式",
-  AncLevel: "降噪档位",
-  TransparencyLevel: "通透档位",
-  NoiseCycle: "降噪切换顺序",
-  Eq: "均衡器模式",
-  GameMode: "游戏模式",
-  AudioMode: "音频编解码",
-  Multipoint: "双设备连接",
-  TouchEnabled: "触控开关",
-  EarDetection: "佩戴检测",
-  TouchBinding: "触控操作",
-  TapEnabled: "敲击控制开关",
-  TapBinding: "敲击操作",
-  PromptVolume: "提示音音量",
-  CustomEq: "自定义均衡器曲线",
-  Gain: "低音增强",
-  HearingProtection: "听力保护",
-  BassBoost: "低音增强",
-  PromptLanguage: "提示音语言",
-  SpatialAudio: "空间音频",
-  SpatialMode: "空间音频模式",
-  SpatialContent: "空间音频内容",
-  EarAdaptive: "耳道自适应",
-  IndependentMicActivation: "独立麦克风激活",
-  IndependentMicMode: "独立麦克风模式",
-};
-
-const SEMANTIC_VALUE_LABELS: Record<string, string> = {
-  anc: "主动降噪",
-  normal: "关闭",
-  wind: "抗风噪",
-  transparency: "通透",
-  auto: "自适应",
-  deep: "深度降噪",
-  dynamic: "动态降噪",
-  aac_sbc: "AAC / SBC",
-  ldac: "LDAC",
-  ldac_lhdc: "LDAC + LHDC",
-  lhdc: "LHDC",
-  lc3: "LC3",
-  chinese: "中文",
-  english: "英文",
-  pop: "流行",
-  hifi: "Hi-Fi",
-  rock: "摇滚",
-  light: "轻音乐",
-  custom: "自定义",
-  off: "关闭",
-  head_tracking: "头部跟踪",
-  fixed: "固定",
-  tv: "电视",
-  music: "音乐",
-  movie: "电影",
-  game: "游戏",
-};
-
 const PERMISSION_LABELS: Record<PermissionState, string> = {
   NotRequired: "无需权限",
   Required: "需要授予",
@@ -316,15 +83,6 @@ const APPLICABILITY_LABELS: Record<PlatformApplicability, string> = {
   Applicable: "适用",
 };
 
-export function fullSnapshotOf(controller: HeadsetController): FullControlSnapshot {
-  return controller.snapshot() as unknown as FullControlSnapshot;
-}
-
-export function currentHeadsetOf(controller: HeadsetController): HeadsetCandidate | null {
-  controller.snapshot();
-  return (OpenRoseHeadsetFlow.currentHeadset(controller.client) as HeadsetCandidate | null) ?? null;
-}
-
 export function modelConfigurationLabel(
   profileId: string | null | undefined,
   catalogById: Map<string, ModelCatalogEntry>,
@@ -343,19 +101,6 @@ export function modelConfigurationCaption(
   const model = catalogById.get(profileId);
   if (!model) return profileId;
   return model.versionName ? `${model.versionName} · ${model.familyLabel}` : model.familyLabel;
-}
-
-export function candidateDisplayName(
-  candidate: HeadsetCandidate,
-  catalogById: Map<string, ModelCatalogEntry>,
-): string {
-  const rawName = candidate.name?.trim();
-  if (rawName) return rawName;
-  if (candidate.profile) {
-    const model = catalogById.get(candidate.profile);
-    if (model) return model.displayName;
-  }
-  return candidate.id;
 }
 
 export function transportUnavailableText(
@@ -483,7 +228,7 @@ export function connectionBlockMessage(
 }
 
 export function scanBlockMessage(
-  snap: FullControlSnapshot,
+  snap: ControlSnapshot,
 ): { title: string; detail: string | null } | null {
   if (snap.platform.scan_permission === "Required" || snap.platform.scan_permission === "Denied") {
     return {
@@ -521,10 +266,6 @@ export function firstConnectionHint(hostPlatform: HostPlatform): string {
   return "打开耳机并靠近设备，必要时让耳机进入配对模式。";
 }
 
-export function connectionPhaseLabel(phase: ConnectionPhase): string {
-  return PHASE_TEXT[phase] ?? phase;
-}
-
 export function recoveryReasonLabel(reason: TransportRecoveryReason): string {
   return RECOVERY_REASON_TEXT[reason] ?? reason;
 }
@@ -549,32 +290,20 @@ export function controlTransportSummary(
   };
 }
 
-export function fieldDisplayLabel(field: string): string {
-  return FIELD_LABELS[field] ?? field;
-}
-
-export function settingDisplayLabel(setting: string): string {
-  return SETTING_LABELS[setting] ?? setting;
-}
-
 export function settingStageLabel(stage: SettingStage): string {
   return STAGE_TEXT[stage] ?? stage;
 }
 
 export function formatKnownValue(field: string | null, rawValue: unknown): string {
   if (!rawValue || typeof rawValue !== "object") return String(rawValue);
-  const val = rawValue as ExtendedFieldValue;
-  if ("Number" in val && val.Number !== undefined) {
-    if (
-      field === "LeftBattery" ||
-      field === "RightBattery" ||
-      field === "CaseBattery"
-    ) {
+  const val = rawValue as FieldValue;
+  if ("Number" in val) {
+    if (field === "LeftBattery" || field === "RightBattery" || field === "CaseBattery") {
       return `${val.Number}%`;
     }
     return String(val.Number);
   }
-  if ("Toggle" in val && val.Toggle !== undefined) {
+  if ("Toggle" in val) {
     if (field === "LeftCharging" || field === "RightCharging") {
       return val.Toggle ? "充电中" : "未充电";
     }
@@ -586,26 +315,20 @@ export function formatKnownValue(field: string | null, rawValue: unknown): strin
     }
     return val.Toggle ? "开启" : "关闭";
   }
-  if ("Text" in val && val.Text !== undefined) {
-    return SEMANTIC_VALUE_LABELS[val.Text] ?? val.Text;
-  }
-  if ("Firmware" in val && val.Firmware) {
-    return val.Firmware.display_text;
-  }
-  if ("IntegerList" in val && val.IntegerList) {
-    return val.IntegerList.join(", ");
-  }
-  if ("TouchKeys" in val && val.TouchKeys) {
+  if ("Text" in val) return semanticLabel(val.Text);
+  if ("Firmware" in val) return val.Firmware.display_text;
+  if ("IntegerList" in val) return val.IntegerList.join(", ");
+  if ("TouchKeys" in val) {
     return val.TouchKeys.map(
       (b) =>
-        `${b.side}/${b.gesture}: ${b.action ? (SEMANTIC_VALUE_LABELS[b.action] ?? b.action) : `未识别动作 ${b.raw_action}`}`,
+        `${b.side}/${b.gesture}: ${b.action ? semanticLabel(b.action) : `未识别动作 ${b.raw_action}`}`,
     ).join("；");
   }
-  if ("TouchAssignment" in val && val.TouchAssignment) {
+  if ("TouchAssignment" in val) {
     const a = val.TouchAssignment;
-    return `${a.side}/${a.gesture} → ${SEMANTIC_VALUE_LABELS[a.action] ?? a.action}`;
+    return `${a.side}/${a.gesture} → ${semanticLabel(a.action)}`;
   }
-  if ("NoiseCycle" in val && val.NoiseCycle) {
+  if ("NoiseCycle" in val) {
     return Object.entries(val.NoiseCycle)
       .filter(([, enabled]) => enabled === true)
       .map(([mode]) => noiseModeLabel(mode))
@@ -644,7 +367,7 @@ export function fieldRawHex(reading: FieldReading | undefined): string {
 }
 
 export function platformStateSummaryRows(
-  snap: FullControlSnapshot,
+  snap: ControlSnapshot,
 ): Array<{ label: string; value: string; detail?: string | null; tone?: "neutral" | "success" | "warning" | "danger" }> {
   const plat = snap.platform;
   const block = connectionBlockMessage(snap.connection_block_reason, plat.host_platform);
@@ -730,10 +453,27 @@ export function operationRequestedText(op: SettingOperation): string {
   return formatKnownValue(op.setting, op.requested_value);
 }
 
-export function createAddHeadsetModel(controller: HeadsetController) {
+export interface AddHeadsetError {
+  id: string;
+  message: string;
+}
+
+export interface AddHeadsetModel {
+  selectedId: () => string | null;
+  addBusy: () => boolean;
+  addError: () => AddHeadsetError | null;
+  addedControlId: () => string | null;
+  startScan: () => Promise<void>;
+  stopScan: () => Promise<void>;
+  connectCandidate: (headsetId: string) => Promise<void>;
+  cancelConnection: () => Promise<void>;
+  clearAddedState: () => void;
+}
+
+export function createAddHeadsetModel(controller: HeadsetController): AddHeadsetModel {
   const selectedId = signal<string | null>(null);
   const addBusy = signal(false);
-  const addError = signal<{ id: string; message: string } | null>(null);
+  const addError = signal<AddHeadsetError | null>(null);
   const addedControlId = signal<string | null>(null);
 
   async function startScan() {
@@ -742,11 +482,7 @@ export function createAddHeadsetModel(controller: HeadsetController) {
     try {
       await controller.client.startScan();
     } catch (error) {
-      const snapErr = fullSnapshotOf(controller).last_error;
-      addError.set({
-        id: "__scan__",
-        message: snapErr?.message ?? (error instanceof Error ? error.message : String(error)),
-      });
+      addError.set({ id: "__scan__", message: errorCategoryLabel(controlErrorOf(error).code) });
     }
   }
 
@@ -763,18 +499,14 @@ export function createAddHeadsetModel(controller: HeadsetController) {
     try {
       await OpenRoseHeadsetFlow.connectForAddHeadset(controller.client, headsetId);
       await controller.client.stopScan();
-      const snap = fullSnapshotOf(controller);
+      const snap = controller.snapshot();
       if (snap.connection !== "Disconnected" && "Connected" in snap.connection) {
         if (snap.connection.Connected.headset_id === headsetId) {
           addedControlId.set(headsetId);
         }
       }
     } catch (error) {
-      const snapErr = fullSnapshotOf(controller).last_error;
-      addError.set({
-        id: headsetId,
-        message: snapErr?.message ?? (error instanceof Error ? error.message : String(error)),
-      });
+      addError.set({ id: headsetId, message: errorCategoryLabel(controlErrorOf(error).code) });
     } finally {
       addBusy.set(false);
     }
@@ -801,5 +533,339 @@ export function createAddHeadsetModel(controller: HeadsetController) {
     connectCandidate,
     cancelConnection,
     clearAddedState,
+  };
+}
+
+export interface BondedHeadsetItemView {
+  id: string;
+  displayName: string;
+  configCaption: string | null;
+  isCurrent: boolean;
+}
+
+export interface AddHeadsetCandidateView {
+  id: string;
+  displayName: string;
+  configCaption: string | null;
+  rssiText: string | null;
+  connectingPhaseLabel: string | null;
+  isControlConnected: boolean;
+  errorMessage: string | null;
+}
+
+export interface UnsupportedCandidateView {
+  id: string;
+  name: string;
+  rssiText: string | null;
+}
+
+export interface DiagnosticsPlatformRow {
+  label: string;
+  value: string;
+  detail?: string | null;
+  tone?: ToneVariant;
+}
+
+export interface DiagnosticsOperationItem {
+  id: number;
+  title: string;
+  stageLabel: string;
+  detail: string;
+  tone: ToneVariant;
+}
+
+export interface DiagnosticsReadingItem {
+  field: string;
+  label: string;
+  valueText: string;
+  rawHex: string;
+}
+
+const UNNAMED_HEADSET_TITLE = "ROSE 耳机";
+
+export function createDesktopViews(controller: HeadsetController, addModel: AddHeadsetModel) {
+  const catalogById = controller.catalogById;
+
+  const activeProfileId = () =>
+    controller.connectionStatus().profileId ??
+    controller.currentHeadset()?.profile ??
+    controller.devConfig()?.modelId ??
+    null;
+
+  const headsetTitle = () => {
+    const current = controller.currentHeadset();
+    if (controller.connectionStatus().kind === "disconnected" && !current) {
+      return UNNAMED_HEADSET_TITLE;
+    }
+    const profileId = activeProfileId();
+    const entry = profileId ? catalogById.get(profileId) : undefined;
+    if (entry) {
+      return entry.versionName ? `${entry.displayName} · ${entry.versionName}` : entry.displayName;
+    }
+    return headsetDisplayName(current, catalogById) ?? UNNAMED_HEADSET_TITLE;
+  };
+
+  const connectionSubtitle = () => {
+    const status = controller.connectionStatus();
+    if (status.kind === "disconnected") {
+      const snap = controller.snapshot();
+      const failed = Boolean(controller.connectionError() || snap.last_error);
+      return reconnectGuidanceText(snap.reconnect_guidance, failed);
+    }
+    const fw = controller.firmwareText();
+    return fw ? `${status.phaseLabel} · 固件 ${fw}` : status.phaseLabel;
+  };
+
+  const blockReason = () => {
+    const snap = controller.snapshot();
+    return connectionBlockMessage(snap.connection_block_reason, snap.platform.host_platform);
+  };
+
+  const connectionError = () => {
+    const error = controller.connectionError();
+    return error
+      ? { title: `连接失败：${controlErrorTitle(error.code)}`, detail: error.message || null }
+      : null;
+  };
+
+  const bondedHeadsets = (): BondedHeadsetItemView[] => {
+    const currentId = controller.currentHeadset()?.id;
+    return controller.snapshot().bonded_headsets.map((candidate) => ({
+      id: candidate.id,
+      displayName: headsetDisplayName(candidate, catalogById) ?? candidate.id,
+      configCaption: modelConfigurationCaption(candidate.profile, catalogById),
+      isCurrent: currentId === candidate.id,
+    }));
+  };
+
+  const batteryItems = (): MetricItem[] =>
+    controller.batterySlots().map((slot) => ({
+      id: slot.id,
+      testID: `battery-${slot.id}`,
+      label: slot.label,
+      valueText: slot.valueText,
+      caption: slot.caption,
+      low: slot.low,
+    }));
+
+  const noiseOptions = (): SegmentOption[] =>
+    controller.noiseModes().map((mode) => ({
+      value: mode,
+      label: noiseModeLabel(mode),
+      testID: `noise-mode-${mode}`,
+    }));
+
+  const noiseStatus = (): { tone: ToneVariant; title: string; detail?: string | null } | null => {
+    const feedback = controller.noiseFeedback();
+    if (feedback.kind === "in_progress") {
+      return {
+        tone: "warning",
+        title: `正在切换至${noiseModeLabel(feedback.mode)}…`,
+        detail: `阶段：${settingStageLabel(feedback.stage)}`,
+      };
+    }
+    if (feedback.kind === "confirmed") {
+      return { tone: "success", title: `已确认：${noiseModeLabel(feedback.mode)}` };
+    }
+    if (feedback.kind === "failed") {
+      return {
+        tone: "danger",
+        title: `切换失败：${controlErrorTitle(feedback.code)}`,
+        detail: feedback.message || null,
+      };
+    }
+    return null;
+  };
+
+  const activeNoiseValue = () => {
+    const feedback = controller.noiseFeedback();
+    return feedback.kind === "in_progress" ? feedback.mode : controller.confirmedNoiseMode();
+  };
+
+  const confirmedNoiseLabel = () => {
+    const mode = controller.confirmedNoiseMode();
+    return mode ? noiseModeLabel(mode) : null;
+  };
+
+  const addSupportedCandidates = (): AddHeadsetCandidateView[] => {
+    const status = controller.connectionStatus();
+    const err = addModel.addError();
+    const selected = addModel.selectedId();
+    return controller
+      .snapshot()
+      .candidates.filter((candidate) => candidate.profile !== null)
+      .map((candidate) => {
+        const isConnectingThis = status.kind === "connecting" && status.headsetId === candidate.id;
+        return {
+          id: candidate.id,
+          displayName: headsetDisplayName(candidate, catalogById) ?? candidate.id,
+          configCaption: modelConfigurationCaption(candidate.profile, catalogById),
+          rssiText: candidate.rssi !== null ? `${candidate.rssi} dBm` : null,
+          connectingPhaseLabel: isConnectingThis
+            ? status.phaseLabel
+            : addModel.addBusy() && selected === candidate.id
+              ? "正在建立控制连接…"
+              : null,
+          isControlConnected: status.kind === "connected" && status.headsetId === candidate.id,
+          errorMessage: err && err.id === candidate.id ? err.message : null,
+        };
+      });
+  };
+
+  const addUnsupportedCandidates = (): UnsupportedCandidateView[] =>
+    controller
+      .snapshot()
+      .candidates.filter((candidate) => candidate.profile === null)
+      .map((candidate) => ({
+        id: candidate.id,
+        name: candidate.name?.trim() || "未命名蓝牙设备",
+        rssiText: candidate.rssi !== null ? `${candidate.rssi} dBm` : null,
+      }));
+
+  const addScanError = () => {
+    const scan = controller.snapshot().scan;
+    if (typeof scan === "object" && "Failed" in scan) return controlErrorText(scan.Failed);
+    const err = addModel.addError();
+    return err && err.id === "__scan__" ? err.message : null;
+  };
+
+  const addedControlSuccess = () => {
+    const addedId = addModel.addedControlId();
+    if (!addedId) return false;
+    const status = controller.connectionStatus();
+    return status.kind === "connected" && status.headsetId === addedId;
+  };
+
+  const info = () => {
+    const snap = controller.snapshot();
+    const headset = snap.headset;
+    const current = controller.currentHeadset();
+    const status = controller.connectionStatus();
+    const profileId = headset?.readings.profile ?? status.profileId ?? current?.profile ?? null;
+    const entry = profileId ? (catalogById.get(profileId) ?? null) : null;
+    const transport = controlTransportSummary(
+      headset?.transport_selection,
+      status.kind !== "disconnected",
+    );
+    const fwText = headset
+      ? fieldReadingDisplay(
+          "Firmware",
+          headset.readings.fields.Firmware,
+          status.phase === "Initializing",
+          headset.diagnostics.field_errors.Firmware,
+        )
+      : "未连接";
+    return {
+      hasHeadset: Boolean(headset || current),
+      isConnected: status.kind === "connected",
+      isConnecting: status.kind === "connecting",
+      modelConfigLabel: modelConfigurationLabel(profileId, catalogById),
+      protocolFamilyLabel: entry?.familyLabel ?? "未识别协议",
+      firmwareText: fwText,
+      controlTransportLabel: transport.transportLabel,
+      controlTransportDetail: transport.detail,
+      headsetId: headset?.headset_id ?? current?.id ?? null,
+      classicAddress: headset?.classic_address ?? current?.classic_address ?? null,
+    };
+  };
+
+  const diagnostics = () => {
+    const snap = controller.snapshot();
+    const headset = snap.headset;
+    const status = controller.connectionStatus();
+    const currentSessionId = status.sessionId;
+    const transport = controlTransportSummary(
+      headset?.transport_selection,
+      status.kind !== "disconnected",
+    );
+    const operations: DiagnosticsOperationItem[] = [...snap.setting_operations]
+      .reverse()
+      .map((op) => {
+        const tone: ToneVariant =
+          op.stage === "Confirmed" ? "success" : isPendingStage(op.stage) ? "warning" : "danger";
+        const detailParts = [`请求值：${operationRequestedText(op)}`];
+        if (op.total_frames > 0) {
+          detailParts.push(`发送进度：${op.written_frames}/${op.total_frames}`);
+        }
+        if (op.confirmed_fields.length > 0) {
+          detailParts.push(`已确认：${op.confirmed_fields.map(fieldLabel).join("、")}`);
+        }
+        if (op.error) {
+          detailParts.push(op.error.message);
+        }
+        if (currentSessionId !== null && op.session_id !== currentSessionId) {
+          detailParts.push(`历史会话 #${op.session_id}`);
+        }
+        return {
+          id: op.id,
+          title: `${settingLabel(op.setting)} · #${op.id}`,
+          stageLabel: settingStageLabel(op.stage),
+          detail: detailParts.join(" · "),
+          tone,
+        };
+      });
+    const readings: DiagnosticsReadingItem[] = headset
+      ? [...headset.readings.capabilities.readable_fields].sort().map((field) => ({
+          field,
+          label: fieldLabel(field),
+          valueText: fieldReadingDisplay(
+            field,
+            headset.readings.fields[field],
+            status.phase === "Initializing",
+            headset.diagnostics.field_errors[field],
+          ),
+          rawHex: fieldRawHex(headset.readings.fields[field]),
+        }))
+      : [];
+    return {
+      platformRows: platformStateSummaryRows(snap),
+      connectionSummary: headsetTitle(),
+      connectionPhaseText:
+        status.kind === "disconnected"
+          ? "未连接"
+          : status.kind === "connecting"
+            ? status.phaseLabel
+            : connectionPhaseLabel("Ready"),
+      sessionIdText: currentSessionId !== null ? `#${currentSessionId}` : "无活动会话",
+      controlTransportText: transport.transportLabel,
+      controlTransportDetail: transport.detail,
+      recoveryText: snap.connection_recovery
+        ? `会话 #${snap.connection_recovery.session_id} · ${recoveryReasonLabel(snap.connection_recovery.reason)}`
+        : null,
+      lastErrorText: snap.last_error ? controlErrorText(snap.last_error) : null,
+      operations,
+      readings,
+      rawSessionHeader: headset ? `会话 #${headset.session_id} · ${headset.headset_id}` : null,
+      fieldErrors: headset
+        ? Object.entries(headset.diagnostics.field_errors).map(([field, err]) => ({
+            label: fieldLabel(field),
+            detail: controlErrorText(err),
+          }))
+        : [],
+      warnings: headset?.diagnostics.warnings ?? [],
+      rawNotifications: headset?.diagnostics.raw_notifications ?? [],
+      unknownNotifications: headset?.diagnostics.unknown_notifications ?? [],
+    };
+  };
+
+  return {
+    headsetTitle,
+    modelConfigCaption: () => modelConfigurationCaption(activeProfileId(), catalogById),
+    modelConfigLabel: () => modelConfigurationLabel(activeProfileId(), catalogById),
+    connectionSubtitle,
+    blockReason,
+    connectionError,
+    bondedHeadsets,
+    batteryItems,
+    noiseOptions,
+    noiseStatus,
+    activeNoiseValue,
+    confirmedNoiseLabel,
+    addSupportedCandidates,
+    addUnsupportedCandidates,
+    addScanError,
+    addedControlSuccess,
+    info,
+    diagnostics,
   };
 }

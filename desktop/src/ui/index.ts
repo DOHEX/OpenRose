@@ -3,6 +3,7 @@ export {
   ActionButton,
   CollapsibleSection,
   InfoRow,
+  ListItem,
   MetricGrid,
   NoticeBanner,
   SegmentedTabs,
@@ -40,3 +41,20 @@ export {
   SectionTitle,
   TitleBar,
 } from "./primitives";
+export type {
+  AddHeadsetCandidateView,
+  BondedHeadsetItemView,
+  DiagnosticsOperationItem,
+  DiagnosticsPlatformRow,
+  DiagnosticsReadingItem,
+  UnsupportedCandidateView,
+} from "../model/desktopPages";
+export type { CirculationController, PullFeedback } from "../model/circulation";
+export type { LoginLaunchStatus, LoginLaunchStore } from "../model/loginLaunch";
+export type { HeadsetSettingsModel, SettingFeedback } from "../model/settings";
+export type { TrayControlGroup, TrayField, TrayPanelModel } from "../model/trayPanel";
+export type {
+  DesktopSettingsStore,
+  TrayAvailability,
+  TrayPanelControl,
+} from "../model/trayPanelSettings";

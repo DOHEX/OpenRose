@@ -1,11 +1,11 @@
-import type { PullFeedback } from "../model/circulation";
-import type { TrayControlGroup, TrayField, TrayPanelModel } from "../model/trayPanel";
+import type { PullFeedback, TrayControlGroup, TrayField, TrayPanelModel } from "../ui";
 import {
   ActionButton,
   BodyText,
   Column,
   Divider,
   LabelText,
+  ListItem,
   MutedText,
   NoticeBanner,
   Row,
@@ -13,7 +13,7 @@ import {
   SegmentedTabs,
   SelectField,
   StatusBadge,
-  ToggleSwitch,
+  SwitchRow,
 } from "../ui";
 
 export interface TrayPanelProps {
@@ -51,24 +51,16 @@ function TrayFieldView(props: { field: TrayField; onPopupOpenChange: (open: bool
   }
   if (field.kind === "toggle") {
     return (
-      <Row
-        testID={`${field.testID}-row`}
-        class="items-center justify-between gap-2 rounded-(--radius) border border-border bg-card px-3 py-2"
-      >
-        <Column class="flex-1 gap-0.5">
-          <BodyText class="text-xs font-medium">{field.label}</BodyText>
-          {field.caption ? (
-            <MutedText testID={`${field.testID}-caption`}>{field.caption}</MutedText>
-          ) : null}
-        </Column>
-        <ToggleSwitch
-          testID={field.testID}
-          checked={field.checked}
-          disabled={field.disabled}
-          accessibilityLabel={field.label}
-          onChange={field.onChange}
-        />
-      </Row>
+      <SwitchRow
+        rowTestID={`${field.testID}-row`}
+        testID={field.testID}
+        summaryTestID={`${field.testID}-caption`}
+        label={field.label}
+        summary={field.caption}
+        checked={field.checked}
+        disabled={field.disabled}
+        onChange={field.onChange}
+      />
     );
   }
   return (
@@ -130,10 +122,7 @@ export function TrayPanel(props: TrayPanelProps) {
           ) : null}
 
           {summary().remote ? (
-            <Column
-              testID="tray-remote-card"
-              class="gap-2 rounded-(--radius) border border-border bg-muted/40 p-2.5"
-            >
+            <ListItem testID="tray-remote-card" class="gap-2 p-2.5">
               <Row class="items-center justify-between gap-2">
                 <Column class="flex-1 gap-0.5">
                   <BodyText testID="tray-remote-title" class="text-xs font-medium">
@@ -159,7 +148,7 @@ export function TrayPanel(props: TrayPanelProps) {
                   />
                 ) : null}
               </Row>
-            </Column>
+            </ListItem>
           ) : null}
 
           {props.pullFeedback ? (
