@@ -1,6 +1,7 @@
 package io.github.dohex.openrose.platform
 
 import android.annotation.SuppressLint
+import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
@@ -103,18 +104,25 @@ class PhoneCirculationAudio(private val context: Context) : LocalAudio {
             ?: throw refused(YieldRefusalKind.UNAVAILABLE, "手机尚未配对这副耳机")
         val leases = mutableListOf<AndroidAudioProfiles.ProfileProxyLease>()
         try {
-            val ready = withTimeoutOrNull(2_500L) {
-                listOf(BluetoothProfile.A2DP, BluetoothProfile.HEADSET).forEach { profile ->
-                    leases += profiles.requestProfileProxy(adapter, profile)
-                        ?: throw refused(YieldRefusalKind.UNAVAILABLE, "系统音频服务不可用")
-                }
-                true
-            }
-            if (ready != true) throw refused(YieldRefusalKind.UNAVAILABLE, "读取系统音频连接超时")
+            requestLeases(adapter, leases)
             return action(device, leases)
         } finally {
             leases.forEach { it.close() }
         }
+    }
+
+    private suspend fun requestLeases(
+        adapter: BluetoothAdapter,
+        leases: MutableList<AndroidAudioProfiles.ProfileProxyLease>,
+    ) {
+        val ready = withTimeoutOrNull(2_500L) {
+            listOf(BluetoothProfile.A2DP, BluetoothProfile.HEADSET).forEach { profile ->
+                leases += profiles.requestProfileProxy(adapter, profile)
+                    ?: throw refused(YieldRefusalKind.UNAVAILABLE, "系统音频服务不可用")
+            }
+            true
+        }
+        if (ready != true) throw refused(YieldRefusalKind.UNAVAILABLE, "读取系统音频连接超时")
     }
 
     private fun refused(kind: YieldRefusalKind, detail: String) = DriverException.YieldRefused(kind, detail)

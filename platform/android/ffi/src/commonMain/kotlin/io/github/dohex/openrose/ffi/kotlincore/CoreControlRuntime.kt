@@ -32,6 +32,7 @@ interface CoreBackedRuntime : ControlRuntime {
     val coreState: StateFlow<RustSnapshot>
 }
 
+@Suppress("TooManyFunctions")
 class CoreControlRuntime internal constructor(
     private val rust: RustControlRuntime,
     scope: CoroutineScope,

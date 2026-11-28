@@ -152,10 +152,12 @@ internal class AndroidPeerDiscovery(context: Context) :
         if (peerId == null || displayName == null || version != listening.wireVersion) return null
         val addresses = if (Build.VERSION.SDK_INT >= 34) hostAddresses else listOfNotNull(host)
         val factory = if (Build.VERSION.SDK_INT >= 33) network?.socketFactory else null
+        val socketFactory = factory ?: SocketFactory.getDefault()
         val targets = addresses.associate { address ->
-            RouteKey(address.hostAddress.orEmpty().substringBefore('%'), port) to RouteTarget(address, factory ?: SocketFactory.getDefault())
+            RouteKey(address.hostAddress.orEmpty().substringBefore('%'), port) to RouteTarget(address, socketFactory)
         }
-        val record = NearbyPeerRecord(peerId, displayName.take(MAX_ADVERTISED_NAME), targets.keys.map { it.address }, port.toUShort())
+        val shown = displayName.take(MAX_ADVERTISED_NAME)
+        val record = NearbyPeerRecord(peerId, shown, targets.keys.map { it.address }, port.toUShort())
         return ResolvedPeer(record, targets)
     }
 
@@ -195,6 +197,8 @@ internal class AndroidPeerDiscovery(context: Context) :
     }
 }
 
+private fun IOException.terminal() = DriverException.Terminal(toString())
+
 private class AndroidPeerRoute(private val target: RouteTarget, private val port: Int) : PeerRoute {
     private val socket = AtomicReference<Socket?>(null)
     private val input = AtomicReference<InputStream?>(null)
@@ -210,7 +214,7 @@ private class AndroidPeerRoute(private val target: RouteTarget, private val port
                 output.set(opened.getOutputStream())
             } catch (failure: IOException) {
                 runCatching { opened.close() }
-                throw DriverException.Terminal(failure.message ?: "connect failed")
+                throw failure.terminal()
             }
         }
     }
@@ -223,7 +227,7 @@ private class AndroidPeerRoute(private val target: RouteTarget, private val port
                 val count = stream.read(buffer)
                 if (count <= 0) ByteArray(0) else buffer.copyOf(count)
             } catch (failure: IOException) {
-                throw DriverException.Terminal(failure.message ?: "read failed")
+                throw failure.terminal()
             }
         }
     }
@@ -235,7 +239,7 @@ private class AndroidPeerRoute(private val target: RouteTarget, private val port
                 stream.write(value)
                 stream.flush()
             } catch (failure: IOException) {
-                throw DriverException.Terminal(failure.message ?: "write failed")
+                throw failure.terminal()
             }
         }
     }

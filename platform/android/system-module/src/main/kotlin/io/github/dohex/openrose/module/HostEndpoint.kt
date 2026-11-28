@@ -604,18 +604,19 @@ internal class HostEndpoint(
             leaseTable.appLease(request)
             requireVersion(request)
             val requested = decodeOrNull { HostIdentityWire.decodeGeneration(parseWire(request.getString(BridgeWire.PAYLOAD).orEmpty())) }
-                ?: return BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
-            val owner = circulationOwner()
-            val generation = (host.status.value as? HostStatus.Active)?.generation
-            if (owner == null || owner.generation != generation || owner.generation != requested) {
-                return BridgeBundles.response(BridgeWire.STATUS_UNAVAILABLE)
-            }
             val bytes = request.getByteArray(BridgeWire.CIRCULATION)
-                ?: return BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
-            return when (val decoded = decodeCirculationCommand(bytes)) {
-                is CoreDecodeResult.Ok -> circulationResponse(owner, decoded.value)
-                is CoreDecodeResult.Error.Malformed -> BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT, decoded.detail)
-                is CoreDecodeResult.Error.UnsupportedVersion -> BridgeBundles.response(BridgeWire.STATUS_UNSUPPORTED_VERSION)
+            val active = (host.status.value as? HostStatus.Active)?.generation
+            val owner = circulationOwner()?.takeIf { it.generation == active && it.generation == requested }
+            return when {
+                requested == null || bytes == null -> BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+
+                owner == null -> BridgeBundles.response(BridgeWire.STATUS_UNAVAILABLE)
+
+                else -> when (val decoded = decodeCirculationCommand(bytes)) {
+                    is CoreDecodeResult.Ok -> circulationResponse(owner, decoded.value)
+                    is CoreDecodeResult.Error.Malformed -> BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT, decoded.detail)
+                    is CoreDecodeResult.Error.UnsupportedVersion -> BridgeBundles.response(BridgeWire.STATUS_UNSUPPORTED_VERSION)
+                }
             }
         }
 

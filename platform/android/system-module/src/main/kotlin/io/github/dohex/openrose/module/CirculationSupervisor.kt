@@ -27,7 +27,10 @@ internal class CirculationSupervisor(
         }
     }
 
-    suspend fun execute(command: CirculationCommand): CirculationReply = current?.execute(command) ?: CirculationReply.Failed(RemoteError.ServiceClosed)
+    suspend fun execute(command: CirculationCommand): CirculationReply {
+        val node = current ?: return CirculationReply.Failed(RemoteError.ServiceClosed)
+        return node.execute(command)
+    }
 
     @Suppress("TooGenericExceptionCaught")
     private suspend fun restart() {
