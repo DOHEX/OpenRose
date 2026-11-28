@@ -170,7 +170,8 @@ pub fn find_comments_in_rust(source: &str) -> Vec<(usize, usize, String)> {
             let after_line = i;
             let allowed = is_outer_doc
                 && (native_module_pending
-                    || native_module_depth == Some(brace_depth)
+                    || (native_module_depth == Some(brace_depth)
+                        && next_item_is_public(source, after_line))
                     || doc_precedes_nsh_export(source, after_line));
             if !allowed {
                 let snippet = source[start_i..i].trim().to_string();
@@ -710,6 +711,33 @@ fn is_nsh_export_attribute(attr: &str) -> bool {
     )
 }
 
+fn next_item_is_public(source: &str, mut idx: usize) -> bool {
+    let bytes = source.as_bytes();
+    while idx < bytes.len() {
+        while idx < bytes.len() && matches!(bytes[idx], b' ' | b'\t' | b'\r' | b'\n') {
+            idx += 1;
+        }
+        if source[idx..].starts_with("///") {
+            while idx < bytes.len() && bytes[idx] != b'\n' {
+                idx += 1;
+            }
+            continue;
+        }
+        if source[idx..].starts_with("#[") {
+            let Some(end) = find_attribute_end(bytes, idx) else {
+                return false;
+            };
+            idx = end + 1;
+            continue;
+        }
+        let rest = &source[idx..];
+        return rest
+            .strip_prefix("pub")
+            .is_some_and(|tail| tail.starts_with(char::is_whitespace));
+    }
+    false
+}
+
 fn doc_precedes_nsh_export(source: &str, mut idx: usize) -> bool {
     let bytes = source.as_bytes();
     while idx < bytes.len() {
@@ -840,6 +868,29 @@ mod tests {
         let found_nsh = find_comments_in_rust(nsh_exports);
         let nsh_lines: Vec<usize> = found_nsh.iter().map(|(line, _, _)| *line).collect();
         assert_eq!(nsh_lines, vec![8, 11]);
+    }
+
+    #[test]
+    fn module_helpers_that_are_not_pub_cannot_carry_doc_comments() {
+        let source = concat!(
+            "#[module]\n",
+            "impl Client {\n",
+            "    /// Exported.\n",
+            "    pub fn connect(&self) {}\n",
+            "    /// Not exported.\n",
+            "    fn helper(&self) {}\n",
+            "    /// Not exported either.\n",
+            "    pub(crate) fn internal(&self) {}\n",
+            "    /// Exported with an attribute between.\n",
+            "    #[nsh(rename = \"x\")]\n",
+            "    pub fn renamed(&self) {}\n",
+            "}\n",
+        );
+        let lines: Vec<usize> = find_comments_in_rust(source)
+            .iter()
+            .map(|(line, _, _)| *line)
+            .collect();
+        assert_eq!(lines, vec![5, 7]);
     }
 
     #[test]
