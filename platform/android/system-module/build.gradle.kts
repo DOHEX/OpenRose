@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.openrose.android.library)
+    alias(libs.plugins.openrose.rust.ffi)
 }
 android {
     namespace = "io.github.dohex.openrose.module"

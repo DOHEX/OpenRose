@@ -7,13 +7,13 @@ kotlin {
         namespace = "io.github.dohex.openrose.androidintegration"
     }
     sourceSets {
-        commonMain.dependencies { api(projects.shared.headset) }
+        commonMain.dependencies {
+            api(projects.shared.headset)
+            implementation(projects.platform.android.ffi)
+        }
         commonTest.dependencies {
             implementation(kotlin("test"))
             implementation(libs.coroutines.test)
-        }
-        jvmTest.dependencies {
-            implementation(projects.platform.android.ffi)
         }
     }
 }
