@@ -279,8 +279,7 @@ class RustCirculationNodeTest {
     }
 }
 
-private suspend fun CirculationNode.directory(): CirculationReply.Directory =
-    assertIs<CirculationReply.Directory>(execute(CirculationCommand.Directory))
+private suspend fun CirculationNode.directory() = assertIs<CirculationReply.Directory>(execute(CirculationCommand.Directory))
 
 private fun runtime(rig: SimulatedDrivers, transport: ControlTransportAdapter) = RustControlRuntime(
     transport = transport,

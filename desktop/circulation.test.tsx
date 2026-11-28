@@ -116,12 +116,12 @@ test("in call and mic in use refusals keep the peer holding and a clear pull mov
 
   await app.press("id:btn-circ-dev-in-call");
   await app.press("id:btn-circ-pull-0");
-  await app.waitFor("text:对方正在通话，暂时无法切换");
+  await app.waitFor("text:对方正在通话，暂时无法流转");
   expect(app.shows("id:btn-circ-pull-0")).toBe(true);
 
   await app.press("id:btn-circ-dev-mic-in-use");
   await app.press("id:btn-circ-pull-0");
-  await app.waitFor("text:麦克风正在使用，暂时无法切换");
+  await app.waitFor("text:麦克风正在使用，暂时无法流转");
   expect(app.shows("id:btn-circ-pull-0")).toBe(true);
 
   await app.press("id:btn-circ-dev-allow-yield");

@@ -156,6 +156,6 @@ test("an unknown pull outcome is an error, not a success", () => {
 test("acquire failure and timeout have their own text", () => {
   expect(circulationErrorText("AcquireFailed:InCall")).toBe("本机正在通话，无法接入耳机");
   expect(circulationErrorText("AcquireFailed:MicInUse")).toBe("本机麦克风正在使用，无法接入耳机");
-  expect(circulationErrorText("AcquireFailed:Unavailable")).toBe("本机接入耳机失败");
+  expect(circulationErrorText("AcquireFailed:PlatformUnavailable")).toBe("本机接入耳机失败");
   expect(circulationErrorText("Timeout")).toBe("对端响应超时");
 });

@@ -16,19 +16,20 @@ import uniffi.openrose_ffi.DriverException
 import uniffi.openrose_ffi.LocalAudio
 import uniffi.openrose_ffi.YieldRefusalKind
 
+private val unreadableState = YieldRefusalKind.AUDIO_STATE_UNREADABLE
+private val platformUnavailable = YieldRefusalKind.PLATFORM_UNAVAILABLE
+
 @SuppressLint("MissingPermission")
 class PhoneCirculationAudio(private val context: Context) : LocalAudio {
     private val profiles = AndroidAudioProfiles(context)
 
-    override suspend fun isConnected(address: String): Boolean =
-        withProfiles(address, YieldRefusalKind.AUDIO_STATE_UNREADABLE) { device, leases ->
-            leases.any { it.currentProxy().getConnectionState(device) == BluetoothProfile.STATE_CONNECTED }
-        }
+    override suspend fun isConnected(address: String): Boolean = withProfiles(address, unreadableState) { device, leases ->
+        leases.any { it.currentProxy().getConnectionState(device) == BluetoothProfile.STATE_CONNECTED }
+    }
 
-    override suspend fun isMediaConnected(address: String): Boolean =
-        withProfiles(address, YieldRefusalKind.PLATFORM_UNAVAILABLE) { device, leases ->
-            leases.first().currentProxy().getConnectionState(device) == BluetoothProfile.STATE_CONNECTED
-        }
+    override suspend fun isMediaConnected(address: String): Boolean = withProfiles(address, platformUnavailable) { device, leases ->
+        leases.first().currentProxy().getConnectionState(device) == BluetoothProfile.STATE_CONNECTED
+    }
 
     override suspend fun yieldAudio(address: String) {
         checkAudioAvailability()
@@ -50,31 +51,30 @@ class PhoneCirculationAudio(private val context: Context) : LocalAudio {
         }
     }
 
-    private suspend fun change(address: String, connect: Boolean) =
-        withProfiles(address, YieldRefusalKind.PLATFORM_UNAVAILABLE) { device, leases ->
-            val initialStates = leases.map { it.currentProxy().getConnectionState(device) }
-            if (initialStates.any { it == BluetoothProfile.STATE_CONNECTING || it == BluetoothProfile.STATE_DISCONNECTING }) {
-                throw refused(YieldRefusalKind.PLATFORM_UNAVAILABLE, "audio connection is changing")
-            }
-            issueChange(device, leases, connect)
-            val observed = withTimeoutOrNull(12_000L) {
-                while (true) {
-                    val states = leases.map { it.currentProxy().getConnectionState(device) }
-                    val reached = if (connect) {
-                        states.first() == BluetoothProfile.STATE_CONNECTED
-                    } else {
-                        states.all { it == BluetoothProfile.STATE_DISCONNECTED }
-                    }
-                    if (reached) break
-                    delay(120)
-                }
-                true
-            }
-            if (observed != true) {
-                val timedOut = if (connect) "audio connect timed out" else "audio disconnect timed out"
-                throw refused(YieldRefusalKind.PLATFORM_UNAVAILABLE, timedOut)
-            }
+    private suspend fun change(address: String, connect: Boolean) = withProfiles(address, platformUnavailable) { device, leases ->
+        val initialStates = leases.map { it.currentProxy().getConnectionState(device) }
+        if (initialStates.any { it == BluetoothProfile.STATE_CONNECTING || it == BluetoothProfile.STATE_DISCONNECTING }) {
+            throw refused(platformUnavailable, "audio connection is changing")
         }
+        issueChange(device, leases, connect)
+        val observed = withTimeoutOrNull(12_000L) {
+            while (true) {
+                val states = leases.map { it.currentProxy().getConnectionState(device) }
+                val reached = if (connect) {
+                    states.first() == BluetoothProfile.STATE_CONNECTED
+                } else {
+                    states.all { it == BluetoothProfile.STATE_DISCONNECTED }
+                }
+                if (reached) break
+                delay(120)
+            }
+            true
+        }
+        if (observed != true) {
+            val timedOut = if (connect) "audio connect timed out" else "audio disconnect timed out"
+            throw refused(platformUnavailable, timedOut)
+        }
+    }
 
     private fun issueChange(
         device: BluetoothDevice,
@@ -84,7 +84,7 @@ class PhoneCirculationAudio(private val context: Context) : LocalAudio {
         if (Build.VERSION.SDK_INT >= 37) {
             val status = if (connect) device.connect() else device.disconnect()
             if (status != BluetoothStatusCodes.SUCCESS) {
-                throw refused(YieldRefusalKind.PLATFORM_UNAVAILABLE, "bluetooth rejected the audio operation ($status)")
+                throw refused(platformUnavailable, "bluetooth rejected the audio operation ($status)")
             }
             return
         }
@@ -93,7 +93,7 @@ class PhoneCirculationAudio(private val context: Context) : LocalAudio {
         leases.map { it.currentProxy() }.forEach { profile ->
             if (profile.getConnectionState(device) != target) {
                 val accepted = profile.javaClass.getMethod(operation, BluetoothDevice::class.java).invoke(profile, device)
-                if (accepted != true) throw refused(YieldRefusalKind.PLATFORM_UNAVAILABLE, "bluetooth did not accept the audio operation")
+                if (accepted != true) throw refused(platformUnavailable, "bluetooth did not accept the audio operation")
             }
         }
     }
