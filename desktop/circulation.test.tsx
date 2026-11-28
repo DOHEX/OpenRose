@@ -108,3 +108,44 @@ test("unpairing removes the peer from the list", async () => {
   await app.waitFor("id:circ-peers-empty");
   expect(app.shows("id:circ-peer-0")).toBe(false);
 });
+
+test("in call and mic in use refusals keep the peer holding and a clear pull moves the headset here", async () => {
+  const app = await openCirculation();
+  await pairSimulatedPeer(app);
+  await app.waitFor("id:btn-circ-pull-0");
+
+  await app.press("id:btn-circ-dev-in-call");
+  await app.press("id:btn-circ-pull-0");
+  await app.waitFor("text:对方正在通话，暂时无法切换");
+  expect(app.shows("id:btn-circ-pull-0")).toBe(true);
+
+  await app.press("id:btn-circ-dev-mic-in-use");
+  await app.press("id:btn-circ-pull-0");
+  await app.waitFor("text:麦克风正在使用，暂时无法切换");
+  expect(app.shows("id:btn-circ-pull-0")).toBe(true);
+
+  await app.press("id:btn-circ-dev-allow-yield");
+  await app.press("id:btn-circ-pull-0");
+  await app.waitFor("text:已接到这台电脑");
+  expect(app.shows("id:btn-circ-pull-0")).toBe(false);
+
+  await app.press("id:nav-headset");
+  await app.waitFor("id:headset-status-card");
+  await app.waitFor("text:已连接");
+});
+
+test("pulling when no paired peer is reachable reports that peers are unreachable", async () => {
+  const app = await openCirculation();
+  await pairSimulatedPeer(app);
+  await app.waitFor("id:btn-circ-pull-0");
+
+  await app.press("id:btn-circ-dev-offline");
+  await app.waitFor("text:不在线");
+  await app.waitFor("id:btn-circ-pull-offline");
+  await app.press("id:btn-circ-pull-offline");
+  await app.waitFor("text:联系不上任何对端");
+
+  await app.press("id:nav-headset");
+  await app.waitFor("id:headset-status-card");
+  await app.waitFor("text:已连接");
+});

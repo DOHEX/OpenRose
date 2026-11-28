@@ -1,3 +1,4 @@
+import type { PullFeedback } from "../model/circulation";
 import type { TrayControlGroup, TrayField, TrayPanelModel } from "../model/trayPanel";
 import {
   ActionButton,
@@ -17,6 +18,10 @@ import {
 
 export interface TrayPanelProps {
   model: TrayPanelModel;
+  pulling: boolean;
+  pullFeedback: PullFeedback | null;
+  onPull: (address: string) => void;
+  onOpenSoundSettings: () => void;
   onConnect: (headsetId: string) => void;
   onDisconnect: () => void;
   onSelectNoiseMode: (mode: string, sessionId: number) => void;
@@ -124,6 +129,48 @@ export function TrayPanel(props: TrayPanelProps) {
             <MutedText testID="tray-battery">{summary().batteryText!}</MutedText>
           ) : null}
 
+          {summary().remote ? (
+            <Column
+              testID="tray-remote-card"
+              class="gap-2 rounded-(--radius) border border-border bg-muted/40 p-2.5"
+            >
+              <Row class="items-center justify-between gap-2">
+                <Column class="flex-1 gap-0.5">
+                  <BodyText testID="tray-remote-title" class="text-xs font-medium">
+                    {summary().remote!.title}
+                  </BodyText>
+                  {summary().remote!.batteryText ? (
+                    <MutedText testID="tray-remote-battery">
+                      {summary().remote!.batteryText!}
+                    </MutedText>
+                  ) : null}
+                </Column>
+                {summary().remote!.address ? (
+                  <ActionButton
+                    testID="tray-btn-pull"
+                    label="接到这台电脑"
+                    busy={props.pulling}
+                    disabled={props.pulling}
+                    onPress={() => {
+                      const address = summary().remote?.address;
+                      if (address) props.onPull(address);
+                    }}
+                    class="px-2.5 py-1"
+                  />
+                ) : null}
+              </Row>
+            </Column>
+          ) : null}
+
+          {props.pullFeedback ? (
+            <NoticeBanner
+              testID="tray-pull-feedback"
+              tone={props.pullFeedback.tone}
+              title={props.pullFeedback.title}
+              detail={props.pullFeedback.detail}
+            />
+          ) : null}
+
           {summary().noiseModes.length > 0 ? (
             <Column class="gap-1.5">
               <LabelText>降噪模式</LabelText>
@@ -175,6 +222,25 @@ export function TrayPanel(props: TrayPanelProps) {
               label="添加耳机"
               onPress={props.onOpenAddHeadset}
             />
+          ) : null}
+
+          {summary().currentOutput || summary().soundSettingsAvailable ? (
+            <Row testID="tray-audio-row" class="items-center justify-between gap-2">
+              {summary().currentOutput ? (
+                <MutedText testID="tray-current-output" class="flex-1">
+                  {`当前输出：${summary().currentOutput!}`}
+                </MutedText>
+              ) : null}
+              {summary().soundSettingsAvailable ? (
+                <ActionButton
+                  testID="tray-btn-sound-settings"
+                  label="打开声音设置"
+                  variant="ghost"
+                  onPress={props.onOpenSoundSettings}
+                  class="px-2 py-1"
+                />
+              ) : null}
+            </Row>
           ) : null}
 
           <Divider />

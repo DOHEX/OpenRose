@@ -2,7 +2,6 @@ import { signal } from "nsh";
 import { OpenRoseTray } from "openrose-native";
 import { errorCategoryLabel, readKnownNumber, readKnownText, readKnownToggle } from "./headset";
 import type { HeadsetState, SettingOperation } from "./headset";
-import { computeTraySummary } from "./tray";
 import type { TrayHeadsetController, TraySummary } from "./tray";
 import { supportedTrayControls } from "./trayPanelSettings";
 import type { TrayPanelControl, TrayPanelSettings } from "./trayPanelSettings";
@@ -92,6 +91,7 @@ function pendingOperation(
 export function createTrayPanelModel(
   controller: TrayHeadsetController,
   settings: () => TrayPanelSettings,
+  summary: () => TraySummary,
 ): TrayPanelModel {
   const commandError = signal<string | null>(null);
 
@@ -299,7 +299,7 @@ export function createTrayPanelModel(
   const controlGroups = (): TrayControlGroup[] => {
     const snapshot = controller.snapshot();
     const headset = snapshot.headset;
-    if (!headset || !computeTraySummary(controller).connected) return [];
+    if (!headset || !summary().connected) return [];
     const operations = snapshot.setting_operations;
     const groups: TrayControlGroup[] = [];
     const level = settings().showNoiseLevels ? levelField(headset, operations) : null;
@@ -311,7 +311,7 @@ export function createTrayPanelModel(
   };
 
   return {
-    summary: () => computeTraySummary(controller),
+    summary,
     controlGroups,
     commandError: () => commandError(),
   };
