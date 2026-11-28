@@ -1,5 +1,6 @@
 import { appInfo, signal } from "nsh";
 import { OpenRoseLoginLaunch } from "openrose-native";
+import { loginLaunchReasonLabel } from "./labels";
 import { closesMainWindowToTray } from "./tray";
 import type { TrayAvailability } from "./trayPanelSettings";
 
@@ -23,8 +24,6 @@ export interface LoginLaunchStore {
   setEnabled: (enabled: boolean) => Promise<void>;
 }
 
-const DEFAULT_HIDDEN_REASON = "仅安装版可设置登录时启动";
-const DEFAULT_UNSUPPORTED_REASON = "当前系统暂不支持登录时启动";
 
 function sameStatus(a: LoginLaunchStatus, b: LoginLaunchStatus): boolean {
   if (a.kind !== b.kind) return false;
@@ -37,13 +36,13 @@ export function normalizeLoginLaunchStatus(report: LoginLaunchStatusReport): Log
   if (!report.installed) {
     return {
       kind: "hidden",
-      reason: report.reason?.trim() || DEFAULT_HIDDEN_REASON,
+      reason: loginLaunchReasonLabel(report.reason ?? "DevelopmentBuild"),
     };
   }
   if (!report.supported) {
     return {
       kind: "unsupported",
-      reason: report.reason?.trim() || DEFAULT_UNSUPPORTED_REASON,
+      reason: loginLaunchReasonLabel(report.reason),
     };
   }
   return {
@@ -76,7 +75,7 @@ function readLoginLaunchStatus(): LoginLaunchStatus {
   } catch (error) {
     return {
       kind: "unsupported",
-      reason: error instanceof Error ? error.message : DEFAULT_UNSUPPORTED_REASON,
+      reason: loginLaunchReasonLabel(error instanceof Error ? error.message : null),
     };
   }
 }
@@ -105,7 +104,7 @@ export function createLoginLaunchStore(): LoginLaunchStore {
       )) as LoginLaunchStatusReport;
       setStatus(normalizeLoginLaunchStatus(report));
     } catch (err) {
-      error.set(err instanceof Error ? err.message : String(err));
+      error.set(loginLaunchReasonLabel(err instanceof Error ? err.message : null));
       refresh();
     } finally {
       busy.set(false);

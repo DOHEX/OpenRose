@@ -1,11 +1,10 @@
-import { remoteNoiseFeedbackText } from "../model/circulation";
-import type { CirculationController } from "../model/circulation";
-import { noiseModeLabel } from "../model/headset";
+import type { CirculationController } from "../ui";
 import {
   ActionButton,
   Card,
   Column,
   Divider,
+  ListItem,
   MonoText,
   MutedText,
   NoticeBanner,
@@ -22,21 +21,12 @@ function offerValidText(validForMillis: number): string {
   return `配对码约 ${minutes} 分钟内有效`;
 }
 
-export function CirculationPage(props: {
-  controller: CirculationController;
-  localConnected?: boolean;
-  localHeadsetAddress?: string | null;
-}) {
+export function CirculationPage(props: { controller: CirculationController }) {
   const controller = props.controller;
   const unpairedNearby = () =>
     controller.snapshot().nearbyPeers.filter((peer) => !peer.paired);
   const offer = () => controller.snapshot().pairingOffer;
-  const offlinePullAddress = () => {
-    if (props.localConnected) return null;
-    if (controller.remoteHeadsets().some((peer) => peer.holds)) return null;
-    if (controller.snapshot().pairedPeers.length === 0) return null;
-    return controller.lastRemoteAddress() ?? props.localHeadsetAddress ?? null;
-  };
+  const offlinePullAddress = () => controller.offlinePullAddress();
   return (
     <Column class="flex-1 gap-4">
       <Card testID="circulation-card" animateEntrance={true}>
@@ -66,14 +56,14 @@ export function CirculationPage(props: {
           <NoticeBanner
             testID="circ-start-error"
             tone="warning"
-            title="本机暂时无法被其他设备发现"
+            title="本机暂时无法被其他对端发现"
             detail={controller.snapshot().localPeer.startError}
           />
         ) : null}
       </Card>
 
       <Card testID="circ-peers-card" animateEntrance={true} delay={40}>
-        <SectionTitle>已配对对端</SectionTitle>
+        <SectionTitle>已流转配对的对端</SectionTitle>
         {controller.pullFeedback() ? (
           <NoticeBanner
             testID="circ-pull-feedback"
@@ -85,16 +75,16 @@ export function CirculationPage(props: {
         {controller.remoteHeadsets().length === 0 ? (
           <NoticeBanner
             testID="circ-peers-empty"
-            title="还没有配对的对端"
-            detail="在另一台设备上开始配对，再在下方输入配对码；或在本机开始配对。"
+            title="还没有流转配对的对端"
+            detail="在另一台音源设备上开始流转配对，再在下方输入配对码；或在本机开始流转配对。"
           />
         ) : (
           <Column class="gap-3">
             <Each of={controller.remoteHeadsets()} key={(item) => item.peerId}>
               {(peer, index) => (
-                <Column
+                <ListItem
                   testID={`circ-peer-${index()}`}
-                  class="gap-2 rounded-(--radius) border border-border bg-muted/40 p-3"
+                  class="gap-2 p-3"
                 >
                   <Row class="items-center justify-between gap-3">
                     <Column class="flex-1 gap-0.5">
@@ -116,17 +106,12 @@ export function CirculationPage(props: {
                   ) : null}
                   {peer().available && peer().modes.length > 0 ? (
                     <Column class="gap-1.5">
-                      <MutedText>
-                        {peer().confirmedMode
-                          ? `当前：${noiseModeLabel(peer().confirmedMode!)}`
-                          : "噪声控制"}
-                      </MutedText>
+                      <MutedText>{peer().confirmedModeLabel}</MutedText>
                       <SegmentedTabs
-                        accessibilityLabel={`${peer().peerName} 的噪声控制`}
-                        options={peer().modes.map((mode) => ({
-                          value: mode,
-                          label: noiseModeLabel(mode),
-                          testID: `circ-noise-${index()}-${mode}`,
+                        accessibilityLabel={`${peer().peerName} 的降噪模式`}
+                        options={peer().modeOptions.map((option) => ({
+                          ...option,
+                          testID: `circ-noise-${index()}-${option.value}`,
                         }))}
                         value={peer().pendingMode ?? peer().confirmedMode}
                         disabled={!peer().canSwitch}
@@ -134,11 +119,11 @@ export function CirculationPage(props: {
                           void controller.setRemoteNoiseMode(peer().peerId, mode)
                         }
                       />
-                      {remoteNoiseFeedbackText(peer()) ? (
+                      {peer().pendingText ? (
                         <NoticeBanner
                           testID={`circ-noise-status-${index()}`}
                           tone="accent"
-                          title={remoteNoiseFeedbackText(peer())!}
+                          title={peer().pendingText!}
                         />
                       ) : null}
                     </Column>
@@ -168,12 +153,12 @@ export function CirculationPage(props: {
                     />
                     <ActionButton
                       testID={`btn-circ-forget-${index()}`}
-                      label="取消配对"
+                      label="取消流转配对"
                       variant="destructive"
                       onPress={() => void controller.forget(peer().peerId)}
                     />
                   </Row>
-                </Column>
+                </ListItem>
               )}
             </Each>
           </Column>
@@ -191,12 +176,12 @@ export function CirculationPage(props: {
       </Card>
 
       <Card testID="circ-pair-card" animateEntrance={true} delay={80}>
-        <SectionTitle>配对新对端</SectionTitle>
+        <SectionTitle>流转配对新对端</SectionTitle>
         <Column class="gap-2">
-          <MutedText>在本机开始配对，让另一台设备输入配对码或扫描二维码</MutedText>
+          <MutedText>在本机开始流转配对，让另一台音源设备输入配对码或扫描二维码</MutedText>
           <ActionButton
             testID="btn-circ-offer"
-            label="开始配对"
+            label="开始流转配对"
             variant="secondary"
             disabled={controller.busy()}
             onPress={() => void controller.offerPairing()}
@@ -216,9 +201,9 @@ export function CirculationPage(props: {
         </Column>
         <Divider />
         <Column class="gap-2">
-          <MutedText>在另一台设备上开始配对后，选择它并输入其配对码</MutedText>
+          <MutedText>在另一台音源设备上开始流转配对后，选择它并输入其配对码</MutedText>
           {unpairedNearby().length === 0 ? (
-            <NoticeBanner testID="circ-nearby-empty" title="局域网内暂未发现可配对的设备" />
+            <NoticeBanner testID="circ-nearby-empty" title="局域网内暂未发现可流转配对的对端" />
           ) : (
             <Each of={unpairedNearby()} key={(item) => item.id}>
               {(nearby, index) => (
@@ -247,7 +232,7 @@ export function CirculationPage(props: {
           />
           <ActionButton
             testID="btn-circ-pair"
-            label="配对"
+            label="流转配对"
             disabled={
               controller.busy() ||
               controller.selectedPeerId() === null ||
@@ -275,7 +260,7 @@ export function CirculationPage(props: {
             />
             <ActionButton
               testID="btn-circ-dev-open"
-              label="模拟对端开始配对"
+              label="模拟对端开始流转配对"
               variant="secondary"
               disabled={controller.devPeer() === null}
               onPress={() => void controller.devOpenPeerPairing()}
@@ -323,6 +308,13 @@ export function CirculationPage(props: {
               onPress={() => controller.devSetPeerNoAnswer(true)}
             />
             <ActionButton
+              testID="btn-circ-dev-acquire-in-call"
+              label="模拟本机接入被拒（通话中）"
+              variant="secondary"
+              disabled={controller.devPeer() === null}
+              onPress={() => controller.devSetLocalAcquireRefusal("in_call")}
+            />
+            <ActionButton
               testID="btn-circ-dev-allow-yield"
               label="恢复对端可让出"
               variant="secondary"
@@ -330,6 +322,7 @@ export function CirculationPage(props: {
               onPress={() => {
                 controller.devSetPeerYieldRefusal(null);
                 controller.devSetPeerNoAnswer(false);
+                controller.devSetLocalAcquireRefusal(null);
               }}
             />
           </Row>

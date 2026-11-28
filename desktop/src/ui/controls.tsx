@@ -312,6 +312,22 @@ export function MetricGrid(props: { items: MetricItem[] }) {
   );
 }
 
+export function ListItem(props: {
+  children?: JSX.Element;
+  direction?: "row" | "column";
+  class?: string;
+  testID?: string;
+}) {
+  return (
+    <View
+      testID={props.testID}
+      class={`${props.direction === "row" ? "flex-row" : "flex-col"} rounded-(--radius) border border-border bg-muted/40 ${props.class ?? ""}`}
+    >
+      {props.children}
+    </View>
+  );
+}
+
 export function ToggleSwitch(props: {
   checked: boolean;
   disabled?: boolean;
@@ -329,7 +345,7 @@ export function ToggleSwitch(props: {
       hitSlop={6}
       class="flex-row items-center disabled:opacity-50"
       trackClass={`h-5 w-9 justify-center rounded-full border border-border bg-muted px-0.5 checked:border-primary checked:bg-primary ${MOTION_CLASS.colorTransition}`}
-      thumbClass={`size-4 rounded-full bg-card shadow-xs checked:translate-x-4 ${MOTION_CLASS.interactiveTransition}`}
+      thumbClass={`size-4 rounded-full bg-card shadow-xs checked:translate-x-4 ${MOTION_CLASS.thumbTransition}`}
     />
   );
 }
@@ -339,25 +355,50 @@ export function SwitchRow(props: {
   summary?: string | null;
   checked: boolean;
   disabled?: boolean;
+  plain?: boolean;
   testID?: string;
+  rowTestID?: string;
+  summaryTestID?: string;
+  class?: string;
   onChange: (checked: boolean) => void;
 }) {
-  return (
-    <View class="flex-row items-center justify-between gap-3 rounded-(--radius) border border-border bg-muted/40 px-3 py-2.5">
+  const content = (
+    <>
       <View class="flex-1 gap-0.5">
         <Text class="text-sm font-medium text-foreground">{props.label}</Text>
-        {props.summary ? <Text class="text-xs text-muted-foreground">{props.summary}</Text> : null}
+        {props.summary ? (
+          <Text testID={props.summaryTestID} class="text-xs text-muted-foreground">
+            {props.summary}
+          </Text>
+        ) : null}
       </View>
-      <Switch
+      <ToggleSwitch
         testID={props.testID}
         checked={props.checked}
         disabled={props.disabled}
         accessibilityLabel={props.label}
-        onChange={({ checked }) => props.onChange(checked)}
-        trackClass={`h-6 w-11 rounded-full border border-input bg-muted p-0.5 checked:border-primary checked:bg-primary disabled:opacity-50 ${MOTION_CLASS.colorTransition}`}
-        thumbClass={`size-4.5 rounded-full bg-background shadow-xs transition-transform duration-150 motion-reduce:transition-none checked:translate-x-5`}
+        onChange={props.onChange}
       />
-    </View>
+    </>
+  );
+  if (props.plain) {
+    return (
+      <View
+        testID={props.rowTestID}
+        class={`flex-row items-center justify-between gap-3 ${props.class ?? ""}`}
+      >
+        {content}
+      </View>
+    );
+  }
+  return (
+    <ListItem
+      testID={props.rowTestID}
+      direction="row"
+      class={`items-center justify-between gap-3 px-3 py-2.5 ${props.class ?? ""}`}
+    >
+      {content}
+    </ListItem>
   );
 }
 

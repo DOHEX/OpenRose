@@ -149,3 +149,30 @@ test("pulling when no paired peer is reachable reports that peers are unreachabl
   await app.waitFor("id:headset-status-card");
   await app.waitFor("text:已连接");
 });
+
+test("a pull names the contacting stage while a peer has not answered, then the timeout", async () => {
+  const app = await openCirculation();
+  await pairSimulatedPeer(app);
+  await app.waitFor("id:btn-circ-pull-0");
+
+  await app.press("id:btn-circ-dev-no-answer");
+  await app.press("id:btn-circ-pull-0");
+  await app.waitFor("text:正在联系对端…");
+  await app.waitFor("text:对端响应超时");
+  expect(app.shows("id:btn-circ-pull-0")).toBe(true);
+});
+
+test("a refused acquire on this machine says why and a retry takes the headset", async () => {
+  const app = await openCirculation();
+  await pairSimulatedPeer(app);
+  await app.waitFor("id:btn-circ-pull-0");
+
+  await app.press("id:btn-circ-dev-acquire-in-call");
+  await app.press("id:btn-circ-pull-0");
+  await app.waitFor("text:本机正在通话，无法接入耳机");
+
+  await app.press("id:btn-circ-dev-allow-yield");
+  await app.waitFor("id:btn-circ-pull-offline");
+  await app.press("id:btn-circ-pull-offline");
+  await app.waitFor("text:已接到这台电脑");
+});

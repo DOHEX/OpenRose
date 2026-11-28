@@ -1,7 +1,6 @@
 import { signal } from "nsh";
 import { OpenRoseHeadsetFlow } from "openrose-native";
-import { fullSnapshotOf } from "./desktopPages";
-import type { HeadsetController } from "./desktopPages";
+import type { HeadsetController } from "./headset";
 
 export type BondedScenario = "none" | "one" | "two";
 export type PlatformScenario = "ok" | "permission" | "bluetooth-off" | "transport-unavailable";
@@ -47,7 +46,7 @@ export function createDevScenarioModel(controller: HeadsetController) {
   function applyPlatform(next: PlatformScenario) {
     error.set(null);
     try {
-      const base = fullSnapshotOf(controller).platform;
+      const base = controller.snapshot().platform;
       OpenRoseHeadsetFlow.devSetPlatformState(
         controller.client,
         JSON.stringify({ ...base, ...PLATFORM_OVERRIDES[next] }),

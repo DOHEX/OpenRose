@@ -1,4 +1,4 @@
-import type { HeadsetSettingsModel } from "../../../model/settings";
+import type { HeadsetSettingsModel } from "../../../ui";
 import { Card, Column, Divider, MutedText, SectionTitle, SegmentedTabs, SelectField } from "../../../ui";
 import { SettingGroup, ToggleSetting } from "./shared";
 
