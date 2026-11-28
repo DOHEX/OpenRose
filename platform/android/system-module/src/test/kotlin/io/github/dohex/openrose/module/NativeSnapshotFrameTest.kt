@@ -3,6 +3,7 @@ package io.github.dohex.openrose.module
 import android.app.Application
 import android.os.Bundle
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
+import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -43,8 +44,8 @@ class NativeSnapshotFrameTest {
         assertIs<FieldValue.Number>(assertIs<FieldReading.Known>(native.fields[DeviceField.LEFT_BATTERY]).value)
         assertTrue(native.noiseModes.isNotEmpty())
         assertEquals(host.capabilities.noiseControl?.modes.orEmpty().toSet(), native.noiseModes)
-        assertEquals(host.capabilities.writableSettings.map { it.name }.toSet(), native.writableSettings)
-        assertTrue("NOISE_MODE" in native.writableSettings)
+        assertEquals(host.capabilities.writableSettings.toSet(), native.writableSettings)
+        assertTrue(DeviceSetting.NOISE_MODE in native.writableSettings)
     }
 
     @Test

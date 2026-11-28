@@ -4,6 +4,7 @@ import android.app.Application
 import android.os.Bundle
 import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
 import io.github.dohex.openrose.androidintegration.wire.NativeHeadsetSnapshot
+import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -39,7 +40,7 @@ class RenderedSnapshotNoiseTest {
             addresses = emptySet(),
             profile = ModelProfile.I5_ZT,
             capturedElapsedMillis = 1,
-            writableSettings = setOf("NOISE_MODE"),
+            writableSettings = setOf(DeviceSetting.NOISE_MODE),
             readableFields = emptySet(),
             noiseModes = modes,
             ancLevel = null,

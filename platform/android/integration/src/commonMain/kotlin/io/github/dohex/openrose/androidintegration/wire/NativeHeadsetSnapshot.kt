@@ -18,8 +18,8 @@ data class NativeHeadsetSnapshot(
     val addresses: Set<String>,
     val profile: ModelProfile,
     val capturedElapsedMillis: Long,
-    val writableSettings: Set<String>,
-    val readableFields: Set<String>,
+    val writableSettings: Set<DeviceSetting>,
+    val readableFields: Set<DeviceField>,
     val noiseModes: Set<String>,
     val ancLevel: NativeNoiseLevelCapabilities?,
     val transparencyLevel: NativeNoiseLevelCapabilities?,
@@ -29,7 +29,7 @@ data class NativeHeadsetSnapshot(
         get() = NativeSessionReference(hostEpoch, deviceId, sessionId)
 
     val supportsNoiseMode: Boolean
-        get() = "NOISE_MODE" in writableSettings && noiseModes.isNotEmpty()
+        get() = DeviceSetting.NOISE_MODE in writableSettings && noiseModes.isNotEmpty()
 
     fun isFresh(nowElapsedMillis: Long): Boolean = capturedElapsedMillis in 1..nowElapsedMillis &&
         nowElapsedMillis - capturedElapsedMillis <= MAX_AGE_MILLIS
@@ -39,7 +39,7 @@ data class NativeHeadsetSnapshot(
         return normalized in addresses
     }
 
-    fun supportsNoise(mode: String): Boolean = "NOISE_MODE" in writableSettings && mode in noiseModes
+    fun supportsNoise(mode: String): Boolean = DeviceSetting.NOISE_MODE in writableSettings && mode in noiseModes
 
     fun sameReportedState(other: NativeHeadsetSnapshot): Boolean = hostEpoch == other.hostEpoch && deviceId == other.deviceId &&
         sessionId == other.sessionId && addresses == other.addresses && profile == other.profile &&
@@ -67,8 +67,8 @@ data class NativeHeadsetSnapshot(
                 addresses = addresses,
                 profile = device.profile,
                 capturedElapsedMillis = capturedElapsedMillis,
-                writableSettings = device.capabilities.writableSettings.mapTo(linkedSetOf()) { it.name },
-                readableFields = device.capabilities.readableFields.mapTo(linkedSetOf()) { it.name },
+                writableSettings = device.capabilities.writableSettings.toSet(),
+                readableFields = device.capabilities.readableFields.toSet(),
                 noiseModes = noise?.modes.orEmpty().toSet(),
                 ancLevel = noise?.levelCapabilities(DeviceSetting.ANC_LEVEL)?.toNative(),
                 transparencyLevel = noise?.levelCapabilities(DeviceSetting.TRANSPARENCY_LEVEL)?.toNative(),

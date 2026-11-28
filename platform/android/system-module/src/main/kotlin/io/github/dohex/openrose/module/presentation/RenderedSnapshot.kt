@@ -5,6 +5,7 @@ import android.os.Bundle
 import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
 import io.github.dohex.openrose.androidintegration.wire.NativeHeadsetSnapshot
+import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
@@ -49,7 +50,7 @@ internal data class RenderedSnapshot(
 
     fun availableNoiseModes(): List<String> = NoiseMode.entries.map(NoiseMode::id).filter { it in native.noiseModes }
 
-    fun canControlNoise(currentMode: String): Boolean = "NOISE_MODE" in native.writableSettings && currentMode in availableNoiseModes()
+    fun canControlNoise(currentMode: String): Boolean = DeviceSetting.NOISE_MODE in native.writableSettings && currentMode in availableNoiseModes()
 
     fun nextNoiseMode(currentMode: String): String? {
         val modes = availableNoiseModes()

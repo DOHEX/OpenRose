@@ -22,7 +22,6 @@ import io.github.dohex.openrose.ffi.EnumNames
 import io.github.dohex.openrose.ffi.decodeCirculationReply
 import io.github.dohex.openrose.ffi.kotlincore.toKotlin
 import io.github.dohex.openrose.ffi.kotlincore.toRust
-import uniffi.openrose_circulation.RemoteError
 import uniffi.openrose_circulation.CirculationCommand as RustCommand
 import uniffi.openrose_circulation.CirculationReply as RustReply
 import uniffi.openrose_circulation.HandoffStatus as RustHandoff
@@ -61,7 +60,7 @@ internal fun RustReply.toClient(): CirculationReply = when (this) {
 
 internal fun ByteArray?.toCirculationReply(): CirculationReply = when (val decoded = this?.let(::decodeCirculationReply)) {
     is CoreDecodeResult.Ok -> decoded.value.toClient()
-    is CoreDecodeResult.Error.UnsupportedVersion -> throw HostLinkException(RemoteError.UnsupportedVersion.text())
+    is CoreDecodeResult.Error.UnsupportedVersion -> throw HostLinkException("宿主的流转协议版本不兼容")
     is CoreDecodeResult.Error.Malformed, null -> throw HostLinkException("宿主返回了无法识别的内容")
 }
 
