@@ -63,6 +63,24 @@ pub struct RawAudioSnapshot {
     pub profiles: BTreeMap<AudioProfile, Option<RawProfileSnapshot>>,
 }
 
+impl RawAudioSnapshot {
+    pub fn unavailable() -> Self {
+        Self {
+            enabled: false,
+            spp_available: false,
+            le_audio_observable: false,
+            bonded_devices: Vec::new(),
+            profiles: [
+                (AudioProfile::A2dp, None),
+                (AudioProfile::Headset, None),
+                (AudioProfile::LeAudio, None),
+            ]
+            .into_iter()
+            .collect(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum RawAudioEvent {

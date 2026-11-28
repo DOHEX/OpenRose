@@ -243,12 +243,29 @@ pub fn adapter_of(device_path: &str) -> &str {
         .unwrap_or("")
 }
 
+pub fn adapter_powered(properties: &BluezProperties) -> Option<bool> {
+    properties.get("Powered").and_then(BluezValue::as_bool)
+}
+
+pub fn any_adapter_powered(objects: &BluezObjects) -> bool {
+    objects
+        .values()
+        .filter_map(|ifaces| ifaces.get(ADAPTER))
+        .any(|props| adapter_powered(props) == Some(true))
+}
+
+pub fn bearer_connected(interfaces: &BluezInterfaces, bearer: &str) -> Option<bool> {
+    interfaces
+        .get(bearer)
+        .and_then(|props| props.get("Connected"))
+        .and_then(BluezValue::as_bool)
+}
+
 pub fn on_powered_adapter(objects: &BluezObjects, device_path: &str) -> bool {
     objects
         .get(adapter_of(device_path))
         .and_then(|ifaces| ifaces.get(ADAPTER))
-        .and_then(|props| props.get("Powered"))
-        .and_then(BluezValue::as_bool)
+        .and_then(adapter_powered)
         == Some(true)
 }
 

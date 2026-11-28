@@ -1,6 +1,6 @@
 use super::bus::{
     ADAPTER, BluezBus, BluezError, BluezObjects, BluezSignal, BluezValue, CLASSIC_BEARER, DEVICE,
-    LE_BEARER, MEDIA_TRANSPORT, adapter_of, media_belongs_to, on_powered_adapter,
+    LE_BEARER, MEDIA_TRANSPORT, adapter_of, bearer_connected, media_belongs_to, on_powered_adapter,
 };
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
@@ -297,14 +297,8 @@ async fn release_returned_le(
     let still_released = bus.owner().as_deref() == Some(owner.as_str())
         && on_powered_adapter(objects, path)
         && interfaces.is_some_and(|ifaces| ifaces.contains_key(DEVICE));
-    let classic = interfaces
-        .and_then(|ifaces| ifaces.get(CLASSIC_BEARER))
-        .and_then(|props| props.get("Connected"))
-        .and_then(BluezValue::as_bool);
-    let le = interfaces
-        .and_then(|ifaces| ifaces.get(LE_BEARER))
-        .and_then(|props| props.get("Connected"))
-        .and_then(BluezValue::as_bool);
+    let classic = interfaces.and_then(|ifaces| bearer_connected(ifaces, CLASSIC_BEARER));
+    let le = interfaces.and_then(|ifaces| bearer_connected(ifaces, LE_BEARER));
     let has_media = super::bus::has_media_transport(objects, path);
 
     if !still_released {

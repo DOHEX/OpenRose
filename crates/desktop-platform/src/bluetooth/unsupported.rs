@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use openrose_control::audio::{
-    AudioEvents, AudioFactsDriver, AudioProfile, RawAudioDevice, RawAudioEvent, RawAudioSnapshot,
+    AudioEvents, AudioFactsDriver, RawAudioDevice, RawAudioEvent, RawAudioSnapshot,
 };
 use openrose_control::gatt::GattDriver;
 use openrose_control::scan::ScanDriver;
@@ -32,19 +32,7 @@ impl AudioFactsDriver for NoAudioFacts {
     }
 
     async fn snapshot(&self, _target_addresses: &[String]) -> RawAudioSnapshot {
-        RawAudioSnapshot {
-            enabled: false,
-            spp_available: false,
-            le_audio_observable: false,
-            bonded_devices: Vec::new(),
-            profiles: [
-                (AudioProfile::A2dp, None),
-                (AudioProfile::Headset, None),
-                (AudioProfile::LeAudio, None),
-            ]
-            .into_iter()
-            .collect(),
-        }
+        RawAudioSnapshot::unavailable()
     }
 }
 

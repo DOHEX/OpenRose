@@ -1,7 +1,8 @@
 use super::bus::{
-    ADAPTER, BluezBus, BluezError, BluezInterfaces, BluezObjects, BluezProperties, BluezSignal,
+    ADAPTER, AUDIO_SINK_UUID, BluezBus, BluezError, BluezInterfaces, BluezObjects, BluezProperties, BluezSignal,
     BluezValue, CLASSIC_BEARER, DEVICE, LE_BEARER, MEDIA_TRANSPORT, adapter_of, device_path,
-    has_media_transport, media_belongs_to, on_powered_adapter,
+    adapter_powered, any_adapter_powered, bearer_connected, has_media_transport, media_belongs_to,
+    on_powered_adapter,
 };
 use super::gatt::BluezGattDriver;
 use super::released::ReleasedBluezLinks;
@@ -26,12 +27,30 @@ use tokio_util::sync::CancellationToken;
 type BusOpener =
     Box<dyn FnOnce() -> Pin<Box<dyn Future<Output = Result<Arc<dyn BluezBus>, BluezError>> + Send>> + Send>;
 
+#[derive(Default)]
+struct Readiness {
+    done: std::sync::atomic::AtomicBool,
+    notify: Notify,
+}
+
+impl Readiness {
+    fn mark(&self) {
+        self.done.store(true, std::sync::atomic::Ordering::SeqCst);
+        self.notify.notify_waiters();
+    }
+
+    async fn wait(&self) {
+        while !self.done.load(std::sync::atomic::Ordering::SeqCst) {
+            self.notify.notified().await;
+        }
+    }
+}
+
 pub struct BluezControlTransport {
     availability_tx: watch::Sender<TransportAvailability>,
     availability_rx: watch::Receiver<TransportAvailability>,
     bus: Arc<OnceCell<Arc<dyn BluezBus>>>,
-    ready: Arc<Notify>,
-    ready_done: Arc<std::sync::atomic::AtomicBool>,
+    readiness: Arc<Readiness>,
     scan_adapter: Arc<Mutex<Option<String>>>,
     scan_lock: Arc<AsyncMutex<()>>,
     released_links: Arc<ReleasedBluezLinks>,
@@ -62,8 +81,7 @@ impl BluezControlTransport {
             availability_tx,
             availability_rx,
             bus: Arc::new(OnceCell::new()),
-            ready: Arc::new(Notify::new()),
-            ready_done: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            readiness: Arc::new(Readiness::default()),
             scan_adapter: Arc::new(Mutex::new(None)),
             scan_lock: Arc::new(AsyncMutex::new(())),
             released_links: Arc::new(ReleasedBluezLinks::new()),
@@ -121,18 +139,11 @@ impl BluezControlTransport {
     }
 
     fn mark_ready(&self) {
-        self.ready_done
-            .store(true, std::sync::atomic::Ordering::SeqCst);
-        self.ready.notify_waiters();
+        self.readiness.mark();
     }
 
     pub async fn await_initialization(&self) {
-        while !self
-            .ready_done
-            .load(std::sync::atomic::Ordering::SeqCst)
-        {
-            self.ready.notified().await;
-        }
+        self.readiness.wait().await;
     }
 
     pub fn availability(&self) -> watch::Receiver<TransportAvailability> {
@@ -152,7 +163,7 @@ impl BluezControlTransport {
                     }
                 } else if adapters
                     .iter()
-                    .all(|props| props.get("Powered").and_then(BluezValue::as_bool) != Some(true))
+                    .all(|props| adapter_powered(props) != Some(true))
                 {
                     TransportAvailability::Unavailable {
                         reason: TransportUnavailableReason::AdapterPoweredOff,
@@ -243,10 +254,7 @@ impl ControlTransport for BluezControlTransport {
         let adapter = objects
             .iter()
             .filter_map(|(path, ifaces)| {
-                let powered = ifaces
-                    .get(ADAPTER)?
-                    .get("Powered")
-                    .and_then(BluezValue::as_bool);
+                let powered = adapter_powered(ifaces.get(ADAPTER)?);
                 (powered == Some(true)).then(|| path.clone())
             })
             .min()
@@ -304,8 +312,7 @@ impl ControlTransport for BluezControlTransport {
     fn audio_facts(&self) -> Arc<dyn AudioFactsDriver> {
         Arc::new(BluezAudioDriver {
             bus: Arc::clone(&self.bus),
-            ready: Arc::clone(&self.ready),
-            ready_done: Arc::clone(&self.ready_done),
+            readiness: Arc::clone(&self.readiness),
         })
     }
 
@@ -375,18 +382,12 @@ impl ScanDriver for BluezScanDriver {
 
 struct BluezAudioDriver {
     bus: Arc<OnceCell<Arc<dyn BluezBus>>>,
-    ready: Arc<Notify>,
-    ready_done: Arc<std::sync::atomic::AtomicBool>,
+    readiness: Arc<Readiness>,
 }
 
 impl BluezAudioDriver {
     async fn wait_ready(&self) {
-        while !self
-            .ready_done
-            .load(std::sync::atomic::Ordering::SeqCst)
-        {
-            self.ready.notified().await;
-        }
+        self.readiness.wait().await;
     }
 }
 
@@ -401,13 +402,7 @@ impl AudioFactsDriver for BluezAudioDriver {
         let initial_objects = current.objects().await.ok();
         let powered = initial_objects
             .as_ref()
-            .is_some_and(|objs| objs.values().any(|ifaces| {
-                ifaces
-                    .get(ADAPTER)
-                    .and_then(|props| props.get("Powered"))
-                    .and_then(BluezValue::as_bool)
-                    == Some(true)
-            }));
+            .is_some_and(any_adapter_powered);
         let previous = initial_objects
             .as_ref()
             .map(|objs| {
@@ -442,10 +437,10 @@ impl AudioFactsDriver for BluezAudioDriver {
     async fn snapshot(&self, target_addresses: &[String]) -> RawAudioSnapshot {
         self.wait_ready().await;
         let Some(current) = self.bus.get() else {
-            return empty_audio_snapshot();
+            return RawAudioSnapshot::unavailable();
         };
         let Ok(objects) = current.objects().await else {
-            return empty_audio_snapshot();
+            return RawAudioSnapshot::unavailable();
         };
         let targets: BTreeSet<String> = target_addresses
             .iter()
@@ -611,20 +606,9 @@ impl BluezAudioProfiles {
             return Ok(());
         }
         let interfaces = objects.get(&path).cloned().unwrap_or_default();
-        let classic = interfaces
-            .get(CLASSIC_BEARER)
-            .and_then(|props| props.get("Connected"))
-            .and_then(BluezValue::as_bool)
-            .or_else(|| {
-                interfaces
-                    .get(DEVICE)
-                    .and_then(|props| props.get("Connected"))
-                    .and_then(BluezValue::as_bool)
-            });
-        let le_connected = interfaces
-            .get(LE_BEARER)
-            .and_then(|props| props.get("Connected"))
-            .and_then(BluezValue::as_bool);
+        let classic = bearer_connected(&interfaces, CLASSIC_BEARER)
+            .or_else(|| bearer_connected(&interfaces, DEVICE));
+        let le_connected = bearer_connected(&interfaces, LE_BEARER);
         let start_le = classic == Some(false) && le_connected == Some(false);
         let le_owner = current.owner();
         let mut opened_le = false;
@@ -643,9 +627,7 @@ impl BluezAudioProfiles {
                     let objs = current.objects().await.ok()?;
                     let connected = objs
                         .get(&path)
-                        .and_then(|ifaces| ifaces.get(LE_BEARER))
-                        .and_then(|props| props.get("Connected"))
-                        .and_then(BluezValue::as_bool)
+                        .and_then(|ifaces| bearer_connected(ifaces, LE_BEARER))
                         == Some(true);
                     Some(connected)
                 })
@@ -753,14 +735,8 @@ pub fn has_connected_bearer(
     interfaces: &BluezInterfaces,
     device: &BluezProperties,
 ) -> Result<bool, String> {
-    let classic = interfaces
-        .get(CLASSIC_BEARER)
-        .and_then(|props| props.get("Connected"))
-        .and_then(BluezValue::as_bool);
-    let le = interfaces
-        .get(LE_BEARER)
-        .and_then(|props| props.get("Connected"))
-        .and_then(BluezValue::as_bool);
+    let classic = bearer_connected(interfaces, CLASSIC_BEARER);
+    let le = bearer_connected(interfaces, LE_BEARER);
     match (classic, le) {
         (Some(true), _) | (_, Some(true)) => Ok(true),
         (Some(false), Some(false)) => Ok(false),
@@ -841,13 +817,7 @@ pub fn audio_snapshot(objects: &BluezObjects, targets: &BTreeSet<String>) -> Raw
         })
         .collect();
 
-    let enabled = objects.values().any(|ifaces| {
-        ifaces
-            .get(ADAPTER)
-            .and_then(|props| props.get("Powered"))
-            .and_then(BluezValue::as_bool)
-            == Some(true)
-    });
+    let enabled = any_adapter_powered(objects);
 
     RawAudioSnapshot {
         enabled,
@@ -855,22 +825,6 @@ pub fn audio_snapshot(objects: &BluezObjects, targets: &BTreeSet<String>) -> Raw
         le_audio_observable,
         bonded_devices: paired,
         profiles,
-    }
-}
-
-fn empty_audio_snapshot() -> RawAudioSnapshot {
-    RawAudioSnapshot {
-        enabled: false,
-        spp_available: false,
-        le_audio_observable: false,
-        bonded_devices: Vec::new(),
-        profiles: [
-            (AudioProfile::A2dp, None),
-            (AudioProfile::Headset, None),
-            (AudioProfile::LeAudio, None),
-        ]
-        .into_iter()
-        .collect(),
     }
 }
 
@@ -894,8 +848,7 @@ fn connected_audio_profile(
     if objects
         .get(adapter_of(&owner))
         .and_then(|ifaces| ifaces.get(ADAPTER))
-        .and_then(|props| props.get("Powered"))
-        .and_then(BluezValue::as_bool)
+        .and_then(adapter_powered)
         == Some(false)
     {
         return None;
@@ -922,7 +875,7 @@ fn connected_audio_profile(
 
 fn profile_for_uuid(uuid: &str) -> Option<AudioProfile> {
     match uuid.to_ascii_lowercase().as_str() {
-        "0000110a-0000-1000-8000-00805f9b34fb" | "0000110b-0000-1000-8000-00805f9b34fb" => {
+        "0000110a-0000-1000-8000-00805f9b34fb" | AUDIO_SINK_UUID => {
             Some(AudioProfile::A2dp)
         }
         "0000184e-0000-1000-8000-00805f9b34fb"
