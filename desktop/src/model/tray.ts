@@ -45,7 +45,9 @@ export interface TraySummary {
   reconnectLabel: string;
   addHeadset: boolean;
   errorText: string | null;
-  remote: { title: string; batteryText: string | null } | null;
+  remote: { title: string; batteryText: string | null; address: string | null } | null;
+  currentOutput: string | null;
+  soundSettingsAvailable: boolean;
 }
 
 const BATTERY_SHORT_LABELS: Record<BatterySlotView["id"], string> = {
@@ -75,6 +77,7 @@ function headsetName(
 export function computeTraySummary(
   controller: TrayHeadsetController,
   remoteHolder: RemoteHeadsetView | null = null,
+  audio: { currentOutput?: string | null; soundSettingsAvailable?: boolean } = {},
 ): TraySummary {
   const snapshot = controller.snapshot();
   const connection = snapshot.connection;
@@ -143,8 +146,11 @@ export function computeTraySummary(
         ? {
             title: `${remoteHolder.headsetName} · ${remoteHolder.peerName}`,
             batteryText: remoteHolder.batteryText,
+            address: remoteHolder.headsetId ?? remoteHolder.session?.headset_id ?? null,
           }
         : null,
+    currentOutput: audio.currentOutput ?? null,
+    soundSettingsAvailable: audio.soundSettingsAvailable ?? false,
   };
 }
 
@@ -171,6 +177,7 @@ export interface TrayMenuActions {
   togglePanel: () => void;
   openMain: () => void;
   openAddHeadset: () => void;
+  openSoundSettings?: () => void;
   reconnect: (headsetId: string) => void;
   selectNoiseMode: (mode: string, sessionId: number) => void;
   quit: () => void;
@@ -214,6 +221,20 @@ export function buildTrayMenuEntries(
   }
   if (summary.addHeadset) {
     entries.push({ kind: "action", label: "添加耳机", onSelect: () => actions.openAddHeadset() });
+  }
+  if (summary.currentOutput) {
+    entries.push({ kind: "separator" });
+    entries.push({ kind: "label", label: `当前输出：${summary.currentOutput}`, disabled: true });
+  }
+  if (summary.soundSettingsAvailable && actions.openSoundSettings) {
+    if (!summary.currentOutput) {
+      entries.push({ kind: "separator" });
+    }
+    entries.push({
+      kind: "action",
+      label: "打开声音设置",
+      onSelect: () => actions.openSoundSettings?.(),
+    });
   }
   entries.push(
     { kind: "separator" },

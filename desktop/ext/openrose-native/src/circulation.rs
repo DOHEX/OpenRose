@@ -3,9 +3,11 @@ use async_trait::async_trait;
 use nsh_core::JsonValue;
 use nsh_core::prelude::*;
 use openrose_circulation::{
-    CirculationConfig, CirculationNode, NearbyPeer, PairingOffer, Peer, PeerDiscovery, PeerId,
-    RemoteError, RemoteReading, RemoteSessionReference,
+    CirculationConfig, CirculationNode, LocalAudio, NearbyPeer, PairingOffer, Peer, PeerDiscovery,
+    PeerId, PullOutcome, RemoteError, RemoteReading, RemoteSessionReference, YieldReceipt,
+    YieldRefusal,
 };
+use openrose_control::audio::{AudioFactsDriver, AudioProfile, normalize_bluetooth_address};
 use openrose_control::simulator::{SimulatedHeadsetHandle, SimulatedTransport};
 use openrose_control::snapshot::{
     ConnectionState, ControlSnapshot, PermissionState, PlatformState, TransportAvailability,
@@ -26,6 +28,8 @@ use tokio::sync::{mpsc, oneshot, watch};
 use tokio::task::JoinHandle;
 
 const DEFAULT_DEV_PEER_LATENCY_MS: u64 = 40;
+const DEV_RESPONSE_TIMEOUT: Duration = Duration::from_secs(2);
+const DEV_SIMULATED_OUTPUT: &str = "内置扬声器";
 const APP_ID: &str = "io.github.dohex.openrose";
 
 #[derive(Clone, Serialize)]
@@ -210,12 +214,146 @@ impl ControlObserver for NoopObserver {
     fn state_changed(&self, _snapshot: &ControlSnapshot) {}
 }
 
+struct DevLocalAudioState {
+    yield_refusal: Option<YieldRefusal>,
+    acquire_refusal: Option<YieldRefusal>,
+    no_answer: bool,
+    reply_latency_ms: u64,
+}
+
+struct DevLocalAudio {
+    transport: Arc<SimulatedTransport>,
+    state: Mutex<DevLocalAudioState>,
+    no_answer_tx: watch::Sender<bool>,
+    _no_answer_rx: watch::Receiver<bool>,
+}
+
+impl DevLocalAudio {
+    fn new(transport: Arc<SimulatedTransport>, reply_latency_ms: u64) -> Self {
+        let (no_answer_tx, no_answer_rx) = watch::channel(false);
+        Self {
+            transport,
+            state: Mutex::new(DevLocalAudioState {
+                yield_refusal: None,
+                acquire_refusal: None,
+                no_answer: false,
+                reply_latency_ms,
+            }),
+            no_answer_tx,
+            _no_answer_rx: no_answer_rx,
+        }
+    }
+
+    fn set_yield_refusal(&self, refusal: Option<YieldRefusal>) {
+        self.state.lock().expect("dev audio state lock").yield_refusal = refusal;
+    }
+
+    fn set_acquire_refusal(&self, refusal: Option<YieldRefusal>) {
+        self.state
+            .lock()
+            .expect("dev audio state lock")
+            .acquire_refusal = refusal;
+    }
+
+    fn set_no_answer(&self, no_answer: bool) {
+        self.state.lock().expect("dev audio state lock").no_answer = no_answer;
+        self.no_answer_tx.send_replace(no_answer);
+    }
+
+    async fn profile_connected(&self, address: &str, include_headset: bool) -> bool {
+        let snap = self
+            .transport
+            .audio()
+            .snapshot(&[address.to_string()])
+            .await;
+        let check = |profile: AudioProfile| {
+            snap.profiles
+                .get(&profile)
+                .and_then(Option::as_ref)
+                .is_some_and(|raw| {
+                    raw.connected_addresses
+                        .iter()
+                        .any(|item| same_dev_address(item, address))
+                })
+        };
+        check(AudioProfile::A2dp) || (include_headset && check(AudioProfile::Headset))
+    }
+}
+
+#[async_trait]
+impl LocalAudio for DevLocalAudio {
+    async fn is_connected(&self, address: &str) -> bool {
+        self.profile_connected(address, true).await
+    }
+
+    async fn is_media_connected(&self, address: &str) -> bool {
+        self.profile_connected(address, false).await
+    }
+
+    async fn yield_audio(&self, address: &str) -> Result<YieldReceipt, YieldRefusal> {
+        let (no_answer, refusal) = {
+            let state = self.state.lock().expect("dev audio state lock");
+            (state.no_answer, state.yield_refusal.clone())
+        };
+        if no_answer {
+            let mut rx = self.no_answer_tx.subscribe();
+            let _ = tokio::time::timeout(
+                Duration::from_secs(30),
+                rx.wait_for(|hanging| !*hanging),
+            )
+            .await;
+            return Err(YieldRefusal::Unavailable("no_answer".to_string()));
+        }
+        if let Some(refusal) = refusal {
+            return Err(refusal);
+        }
+        self.transport.audio().set_audio_connected(None);
+        Ok(YieldReceipt {
+            address: address.to_string(),
+        })
+    }
+
+    async fn acquire(&self, address: &str) -> Result<(), YieldRefusal> {
+        let (refusal, reply_latency_ms) = {
+            let state = self.state.lock().expect("dev audio state lock");
+            (state.acquire_refusal.clone(), state.reply_latency_ms)
+        };
+        if let Some(refusal) = refusal {
+            return Err(refusal);
+        }
+        let normalized =
+            normalize_bluetooth_address(address).unwrap_or_else(|| address.to_string());
+        let bonded = self
+            .transport
+            .audio()
+            .bonded_devices()
+            .await
+            .unwrap_or_default();
+        let already_bonded = bonded
+            .iter()
+            .any(|device| same_dev_address(&device.address, &normalized));
+        if !already_bonded {
+            let profile = ModelProfile::I5Zt;
+            if let Ok(handle) = self.transport.add_headset(
+                HeadsetId::new(normalized.clone()),
+                profile,
+                profile.family().default_firmware(),
+            ) {
+                handle.reply_latency(Duration::from_millis(reply_latency_ms));
+            }
+        }
+        self.transport.audio().set_audio_connected(Some(&normalized));
+        Ok(())
+    }
+}
+
 struct DevPeerState {
     node: CirculationNode,
     transport: Arc<SimulatedTransport>,
     runtime: Arc<ControlRuntime>,
     handle: SimulatedHeadsetHandle,
     headset_id: HeadsetId,
+    audio: Arc<DevLocalAudio>,
     online: AtomicBool,
     reply_latency_ms: AtomicU64,
 }
@@ -245,11 +383,12 @@ impl DevPeerState {
 struct DevCirculationState {
     hub: Arc<LoopbackDiscoveryHub>,
     temp_root: PathBuf,
+    local_audio: Arc<DevLocalAudio>,
+    sound_settings_available: AtomicBool,
     seq: AtomicU64,
     peers: Mutex<BTreeMap<String, Arc<DevPeerState>>>,
     last_peer_id: Mutex<Option<String>>,
 }
-
 impl DevCirculationState {
     fn get_peer(&self, peer_id: Option<&str>) -> Result<Arc<DevPeerState>, String> {
         let peers = self.peers.lock().expect("dev peers lock");
@@ -555,6 +694,37 @@ impl CirculationInner {
         self.record_result(result)
     }
 
+    async fn pull(&self, address: String) -> Result<String, String> {
+        self.wait_started().await;
+        let result = self.node.pull(&address).await;
+        if matches!(
+            result,
+            Ok(PullOutcome::Acquired) | Err(RemoteError::AcquireFailed(_))
+        ) {
+            let nearby_ids: BTreeSet<PeerId> = self
+                .node
+                .nearby()
+                .into_iter()
+                .map(|peer| peer.id)
+                .collect();
+            for peer in self.node.peers() {
+                if nearby_ids.contains(&peer.id) {
+                    let _ = self.node.remote_read(&peer.id).await;
+                }
+            }
+        }
+        self.record_result(result).map(pull_outcome_code)
+    }
+
+    async fn current_output(&self) -> Result<Option<String>, String> {
+        if self.dev_state.is_some() {
+            return Ok(Some(DEV_SIMULATED_OUTPUT.to_string()));
+        }
+        Ok(openrose_desktop_platform::audio::current_output()
+            .await
+            .ok())
+    }
+
     async fn close(&self) {
         if let Some(handle) = self
             .offer_expiry_task
@@ -563,6 +733,11 @@ impl CirculationInner {
             .take()
         {
             handle.abort();
+        }
+        if let Some(dev) = &self.dev_state {
+            for peer in dev.all_peers() {
+                peer.audio.set_no_answer(false);
+            }
         }
         self.node.close().await;
         self.local_meta_tx.send_modify(|meta| {
@@ -578,7 +753,6 @@ impl CirculationInner {
             }
         }
     }
-
     async fn dev_add_simulated_peer(&self, name: Option<String>) -> Result<DevPeerStatus, String> {
         self.wait_started().await;
         let dev = self
@@ -604,10 +778,15 @@ impl CirculationInner {
                 }
             });
 
-        let remote_node = CirculationNode::with_control(
+        let peer_audio = Arc::new(DevLocalAudio::new(
+            Arc::clone(&remote_transport),
+            DEFAULT_DEV_PEER_LATENCY_MS,
+        ));
+        let remote_node = CirculationNode::with_control_and_audio(
             CirculationConfig::loopback(peer_dir, peer_name),
             dev.hub.client(),
             Arc::clone(&remote_runtime),
+            Arc::clone(&peer_audio) as Arc<dyn LocalAudio>,
         )
         .map_err(|err| remote_error_code(&err))?;
 
@@ -616,6 +795,7 @@ impl CirculationInner {
             .start()
             .await
             .map_err(|err| remote_error_code(&err))?;
+        let peer_id = remote_node.id().as_str().to_string();
 
         let peer_state = Arc::new(DevPeerState {
             node: remote_node,
@@ -623,10 +803,10 @@ impl CirculationInner {
             runtime: remote_runtime,
             handle,
             headset_id,
+            audio: peer_audio,
             online: AtomicBool::new(true),
             reply_latency_ms: AtomicU64::new(DEFAULT_DEV_PEER_LATENCY_MS),
         });
-        let peer_id = peer_state.node.id().as_str().to_string();
         dev.peers
             .lock()
             .expect("dev peers lock")
@@ -738,13 +918,59 @@ fn run_circulation_core<T: Send + nsh_core::element::Ret + 'static>(
     })
 }
 
-fn remote_error_code(err: &RemoteError) -> String {
-    match err {
-        RemoteError::ControlFailed(code) => format!("ControlFailed:{code:?}"),
-        other => format!("{other:?}"),
+fn same_dev_address(left: &str, right: &str) -> bool {
+    match (
+        normalize_bluetooth_address(left),
+        normalize_bluetooth_address(right),
+    ) {
+        (Some(a), Some(b)) => a == b,
+        _ => left.eq_ignore_ascii_case(right),
     }
 }
 
+fn yield_refusal_code(refusal: &YieldRefusal) -> &'static str {
+    match refusal {
+        YieldRefusal::InCall => "InCall",
+        YieldRefusal::MicInUse => "MicInUse",
+        YieldRefusal::Unavailable(_) => "Unavailable",
+    }
+}
+
+fn pull_outcome_code(outcome: PullOutcome) -> String {
+    format!("{outcome:?}")
+}
+
+fn parse_yield_refusal(raw: &str) -> Option<YieldRefusal> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "in_call" | "incall" => Some(YieldRefusal::InCall),
+        "mic_in_use" | "micinuse" => Some(YieldRefusal::MicInUse),
+        "unavailable" => Some(YieldRefusal::Unavailable("simulated".to_string())),
+        _ => None,
+    }
+}
+
+fn parse_optional_yield_refusal(reason: Option<String>) -> Result<Option<YieldRefusal>, JsError> {
+    match reason {
+        Some(raw) => Ok(Some(
+            parse_yield_refusal(&raw)
+                .ok_or_else(|| JsError::Error(remote_error_code(&RemoteError::InvalidArgument)))?,
+        )),
+        None => Ok(None),
+    }
+}
+
+fn remote_error_code(err: &RemoteError) -> String {
+    match err {
+        RemoteError::ControlFailed(code) => format!("ControlFailed:{code:?}"),
+        RemoteError::YieldRefused(refusal) => {
+            format!("YieldRefused:{}", yield_refusal_code(refusal))
+        }
+        RemoteError::AcquireFailed(refusal) => {
+            format!("AcquireFailed:{}", yield_refusal_code(refusal))
+        }
+        other => format!("{other:?}"),
+    }
+}
 fn parse_noise_mode(raw: &str) -> Option<NoiseMode> {
     let trimmed = raw.trim();
     NoiseMode::from_id(trimmed)
@@ -907,14 +1133,22 @@ pub struct OpenRoseCirculation {
 impl OpenRoseCirculation {
     fn create_for_client(client: &OpenRoseClient) -> Result<Self, JsError> {
         let control = Arc::clone(&client.runtime);
-        if client.dev.is_some() {
-            Self::create_dev(control)
+        if let Some(dev) = &client.dev {
+            Self::create_dev(
+                control,
+                Arc::clone(&dev.transport),
+                dev.reply_latency_ms.load(Ordering::SeqCst),
+            )
         } else {
             Self::create_production(control, production_storage_dir(), default_device_name())
         }
     }
 
-    fn create_dev(control: Arc<ControlRuntime>) -> Result<Self, JsError> {
+    fn create_dev(
+        control: Arc<ControlRuntime>,
+        local_transport: Arc<SimulatedTransport>,
+        reply_latency_ms: u64,
+    ) -> Result<Self, JsError> {
         static DEV_SEQ: AtomicU64 = AtomicU64::new(1);
         let seq = DEV_SEQ.fetch_add(1, Ordering::Relaxed);
         let temp_root = std::env::temp_dir().join(format!(
@@ -926,16 +1160,22 @@ impl OpenRoseCirculation {
             .map_err(|err| JsError::Error(remote_error_code(&err)))?;
 
         let hub = LoopbackDiscoveryHub::new();
-        let node = CirculationNode::with_control(
-            CirculationConfig::loopback(local_dir, "本机桌面"),
+        let local_audio = Arc::new(DevLocalAudio::new(local_transport, reply_latency_ms));
+        let config =
+            CirculationConfig::loopback(local_dir, "本机桌面").with_response_timeout(DEV_RESPONSE_TIMEOUT);
+        let node = CirculationNode::with_control_and_audio(
+            config,
             hub.client(),
             control,
+            Arc::clone(&local_audio) as Arc<dyn LocalAudio>,
         )
         .map_err(|err| JsError::Error(remote_error_code(&err)))?;
 
         let dev_state = Arc::new(DevCirculationState {
             hub,
             temp_root,
+            local_audio,
+            sound_settings_available: AtomicBool::new(true),
             seq: AtomicU64::new(0),
             peers: Mutex::new(BTreeMap::new()),
             last_peer_id: Mutex::new(None),
@@ -958,16 +1198,20 @@ impl OpenRoseCirculation {
                 Some(remote_error_code(&err)),
             ),
         };
-        let node = CirculationNode::with_control(
+        let local_audio = {
+            let _guard = SHARED_RUNTIME.enter();
+            openrose_desktop_platform::audio::create_local_audio()
+        };
+        let node = CirculationNode::with_control_and_audio(
             CirculationConfig::new(storage_dir, name),
             discovery,
             control,
+            local_audio,
         )
         .map_err(|err| JsError::Error(remote_error_code(&err)))?;
 
         Ok(Self::spawn_inner(node, initial_error, None))
     }
-
     fn spawn_inner(
         node: CirculationNode,
         initial_error: Option<String>,
@@ -1155,6 +1399,36 @@ impl OpenRoseCirculation {
             Ok(serde_json::to_value(reading).expect("remote reading serializes"))
         })
     }
+    /// Pulls audio and control for the given headset address from the holding peer to this machine.
+    pub fn pull(&self, address: String) -> Later<String> {
+        let inner = Arc::clone(&self.inner);
+        run_circulation_core(async move { inner.pull(address).await })
+    }
+
+    /// Returns the current system default audio output description, or null when unavailable.
+    pub fn current_output(&self) -> Later<Option<String>> {
+        let inner = Arc::clone(&self.inner);
+        run_circulation_core(async move { inner.current_output().await })
+    }
+
+    /// Returns whether a known system sound settings program is installed on this host.
+    pub fn sound_settings_available(&self) -> bool {
+        if let Some(dev) = &self.inner.dev_state {
+            return dev.sound_settings_available.load(Ordering::SeqCst);
+        }
+        openrose_desktop_platform::audio::sound_settings_command().is_some()
+    }
+
+    /// Opens the system sound settings program, failing when none is installed.
+    pub fn open_sound_settings(&self) -> Result<(), JsError> {
+        if let Some(dev) = &self.inner.dev_state {
+            if dev.sound_settings_available.load(Ordering::SeqCst) {
+                return Ok(());
+            }
+            return Err(JsError::Error("未找到系统声音设置程序".to_string()));
+        }
+        openrose_desktop_platform::audio::open_sound_settings().map_err(JsError::Error)
+    }
 
     /// Clears the last recorded error code in the circulation snapshot.
     pub fn clear_error(&self) {
@@ -1212,6 +1486,66 @@ impl OpenRoseCirculation {
             .store(u64::from(millis), Ordering::SeqCst);
         peer.handle
             .reply_latency(Duration::from_millis(u64::from(millis)));
+        Ok(())
+    }
+    /// Configures a dev-mode simulated peer to refuse yield requests (in_call, mic_in_use) or clears the refusal.
+    pub fn dev_set_peer_yield_refusal(
+        &self,
+        reason: Option<String>,
+        peer_id: Option<String>,
+    ) -> Result<(), JsError> {
+        let dev = self
+            .inner
+            .dev_state
+            .as_ref()
+            .ok_or_else(|| JsError::Error(remote_error_code(&RemoteError::UnsupportedOperation)))?;
+        let refusal = parse_optional_yield_refusal(reason)?;
+        let peer = dev
+            .get_peer(peer_id.as_deref())
+            .map_err(JsError::Error)?;
+        peer.audio.set_yield_refusal(refusal);
+        Ok(())
+    }
+
+    /// Configures whether the dev-mode local node refuses local audio acquisition.
+    pub fn dev_set_local_acquire_refusal(&self, reason: Option<String>) -> Result<(), JsError> {
+        let dev = self
+            .inner
+            .dev_state
+            .as_ref()
+            .ok_or_else(|| JsError::Error(remote_error_code(&RemoteError::UnsupportedOperation)))?;
+        dev.local_audio
+            .set_acquire_refusal(parse_optional_yield_refusal(reason)?);
+        Ok(())
+    }
+
+    /// Configures whether dev mode reports an available system sound settings program.
+    pub fn dev_set_sound_settings_available(&self, available: bool) -> Result<(), JsError> {
+        let dev = self
+            .inner
+            .dev_state
+            .as_ref()
+            .ok_or_else(|| JsError::Error(remote_error_code(&RemoteError::UnsupportedOperation)))?;
+        dev.sound_settings_available
+            .store(available, Ordering::SeqCst);
+        Ok(())
+    }
+
+    /// Configures whether a dev-mode simulated peer stops answering yield requests so pull times out.
+    pub fn dev_set_peer_no_answer(
+        &self,
+        no_answer: bool,
+        peer_id: Option<String>,
+    ) -> Result<(), JsError> {
+        let dev = self
+            .inner
+            .dev_state
+            .as_ref()
+            .ok_or_else(|| JsError::Error(remote_error_code(&RemoteError::UnsupportedOperation)))?;
+        let peer = dev
+            .get_peer(peer_id.as_deref())
+            .map_err(JsError::Error)?;
+        peer.audio.set_no_answer(no_answer);
         Ok(())
     }
 
@@ -1528,5 +1862,178 @@ mod tests {
             fallback_app_data_dir(None, None, &temp),
             PathBuf::from("/tmp/io.github.dohex.openrose")
         );
+    }
+    #[test]
+    fn dev_mode_pull_moves_audio_and_control_and_handles_refusals_timeout_and_offline() {
+        let client = OpenRoseClient::create_dev(20);
+        let circ = OpenRoseCirculation::create_for_client(&client).expect("create dev circulation");
+        let inner = Arc::clone(&circ.inner);
+        let local_runtime = Arc::clone(&client.runtime);
+
+        SHARED_RUNTIME.block_on(async move {
+            inner.wait_started().await;
+            assert_eq!(
+                inner.current_output().await.expect("dev current output"),
+                Some(DEV_SIMULATED_OUTPUT.to_string())
+            );
+            assert!(circ.sound_settings_available());
+            circ.open_sound_settings().expect("dev open sound settings");
+
+            let dev_state = inner.dev_state.as_ref().expect("dev state");
+            dev_state
+                .sound_settings_available
+                .store(false, Ordering::SeqCst);
+            assert!(!circ.sound_settings_available());
+            assert!(circ.open_sound_settings().is_err());
+            dev_state
+                .sound_settings_available
+                .store(true, Ordering::SeqCst);
+
+            let peer_status = inner
+                .dev_add_simulated_peer(None)
+                .await
+                .expect("add simulated peer");
+            let dev_id = peer_status.peer_id;
+            wait_until("peer1 nearby", || {
+                inner.snapshot().nearby_peers.iter().any(|p| p.id == dev_id)
+            })
+            .await;
+            let peer_offer = inner
+                .dev_open_peer_pairing(Some(dev_id.clone()))
+                .await
+                .expect("peer offer");
+            inner
+                .pair(dev_id.clone(), peer_offer.code)
+                .await
+                .expect("pair");
+            wait_until("paired ready", || {
+                inner.snapshot().paired_peers.iter().any(|p| {
+                    p.id == dev_id && p.available && p.reading.status == RemoteControlStatus::Ready
+                })
+            })
+            .await;
+
+            let headset_id = inner
+                .snapshot()
+                .paired_peers
+                .iter()
+                .find(|p| p.id == dev_id)
+                .and_then(|p| p.reading.headset_id.clone())
+                .expect("peer headset id");
+
+            circ.dev_set_peer_yield_refusal(Some("in_call".to_string()), None)
+                .expect("set in_call refusal");
+            assert_eq!(
+                inner.pull(headset_id.as_str().to_string()).await,
+                Err("YieldRefused:InCall".to_string())
+            );
+            assert!(local_runtime.snapshot().ready_session().is_none());
+
+            circ.dev_set_peer_yield_refusal(Some("mic_in_use".to_string()), None)
+                .expect("set mic_in_use refusal");
+            assert_eq!(
+                inner.pull(headset_id.as_str().to_string()).await,
+                Err("YieldRefused:MicInUse".to_string())
+            );
+            assert!(local_runtime.snapshot().ready_session().is_none());
+
+            circ.dev_set_peer_yield_refusal(None, None)
+                .expect("clear refusal");
+            circ.dev_set_peer_no_answer(true, None)
+                .expect("set no_answer");
+            assert_eq!(
+                inner.pull(headset_id.as_str().to_string()).await,
+                Err("Timeout".to_string())
+            );
+            assert!(local_runtime.snapshot().ready_session().is_none());
+            circ.dev_set_peer_no_answer(false, None)
+                .expect("clear no_answer");
+
+            let peer_ref = dev_state.get_peer(Some(&dev_id)).expect("peer ref");
+            assert!(peer_ref.runtime.snapshot().ready_session().is_some());
+
+            assert_eq!(
+                inner.pull(headset_id.as_str().to_string()).await,
+                Ok("Acquired".to_string())
+            );
+            wait_until("local connected", || {
+                local_runtime.snapshot().ready_session().is_some()
+            })
+            .await;
+            assert!(matches!(
+                peer_ref.runtime.snapshot().connection,
+                ConnectionState::Disconnected
+            ));
+            let snap_after = inner.snapshot();
+            let peer_after = snap_after
+                .paired_peers
+                .iter()
+                .find(|p| p.id == dev_id)
+                .expect("peer after pull");
+            assert_eq!(peer_after.reading.headset_id, None);
+            assert_eq!(
+                inner.pull(headset_id.as_str().to_string()).await,
+                Ok("AlreadyConnected".to_string())
+            );
+
+            let peer2_status = inner
+                .dev_add_simulated_peer(Some("平板".to_string()))
+                .await
+                .expect("add peer2");
+            let dev2_id = peer2_status.peer_id;
+            wait_until("peer2 nearby", || {
+                inner.snapshot().nearby_peers.iter().any(|p| p.id == dev2_id)
+            })
+            .await;
+            let peer2_offer = inner
+                .dev_open_peer_pairing(Some(dev2_id.clone()))
+                .await
+                .expect("peer2 offer");
+            inner
+                .pair(dev2_id.clone(), peer2_offer.code)
+                .await
+                .expect("pair peer2");
+            wait_until("peer2 ready", || {
+                inner.snapshot().paired_peers.iter().any(|p| {
+                    p.id == dev2_id && p.available && p.reading.status == RemoteControlStatus::Ready
+                })
+            })
+            .await;
+            let headset2 = inner
+                .snapshot()
+                .paired_peers
+                .iter()
+                .find(|p| p.id == dev2_id)
+                .and_then(|p| p.reading.headset_id.clone())
+                .expect("peer2 headset id");
+
+            dev_state
+                .local_audio
+                .set_acquire_refusal(Some(YieldRefusal::Unavailable("a2dp_failed".to_string())));
+            assert_eq!(
+                inner.pull(headset2.as_str().to_string()).await,
+                Err("AcquireFailed:Unavailable".to_string())
+            );
+            let peer2_ref = dev_state.get_peer(Some(&dev2_id)).expect("peer2 ref");
+            assert!(matches!(
+                peer2_ref.runtime.snapshot().connection,
+                ConnectionState::Disconnected
+            ));
+            dev_state.local_audio.set_acquire_refusal(None);
+
+            inner
+                .dev_set_peer_online(false, Some(dev_id.clone()))
+                .await
+                .expect("peer1 offline");
+            inner
+                .dev_set_peer_online(false, Some(dev2_id.clone()))
+                .await
+                .expect("peer2 offline");
+            wait_until("all offline", || inner.snapshot().nearby_peers.is_empty()).await;
+            assert_eq!(
+                inner.pull(headset2.as_str().to_string()).await,
+                Ok("AcquiredWithPeersUnreachable".to_string())
+            );
+        });
     }
 }

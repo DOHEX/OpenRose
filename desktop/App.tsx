@@ -635,7 +635,13 @@ function DesktopApp(props: {
                 />
               </Column>
             ) : activePage() === "circulation" ? (
-              <CirculationPage controller={props.circulation} />
+              <CirculationPage
+                controller={props.circulation}
+                localConnected={controller.connectionStatus().kind === "connected"}
+                localHeadsetAddress={
+                  fullSnapshot().connection_target?.id ?? fullSnapshot().bonded_headsets[0]?.id ?? null
+                }
+              />
             ) : activePage() === "tray" ? (
               <TraySettingsPage
                 settings={props.settings}

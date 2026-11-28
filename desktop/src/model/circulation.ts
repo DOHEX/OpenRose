@@ -107,6 +107,8 @@ export interface RemoteHeadsetView {
   peerId: string;
   peerName: string;
   available: boolean;
+  holds: boolean;
+  headsetId: string | null;
   headsetName: string | null;
   batteryText: string | null;
   confirmedMode: string | null;
@@ -114,6 +116,13 @@ export interface RemoteHeadsetView {
   pendingMode: string | null;
   canSwitch: boolean;
   session: RemoteSessionReference | null;
+}
+
+export interface PullFeedback {
+  kind: "in_progress" | "success" | "unreachable" | "error";
+  tone: "accent" | "success" | "warning" | "danger";
+  title: string;
+  detail?: string;
 }
 
 const ERROR_TEXT: Record<string, string> = {
@@ -138,6 +147,13 @@ const ERROR_TEXT: Record<string, string> = {
   IdentityError: "无法读取本机的流转身份",
   StorageError: "无法保存配对信息",
   DiscoveryError: "无法在局域网中发现对端，请检查网络",
+  "YieldRefused:InCall": "对方正在通话，暂时无法切换",
+  "YieldRefused:MicInUse": "麦克风正在使用，暂时无法切换",
+  "YieldRefused:Unavailable": "对端暂时无法让出耳机",
+  "AcquireFailed:InCall": "本机正在通话，无法接入耳机",
+  "AcquireFailed:MicInUse": "本机麦克风正在使用，无法接入耳机",
+  "AcquireFailed:Unavailable": "本机接入耳机失败",
+  PullInProgress: "正在将耳机接到这台电脑，请稍候",
 };
 
 const CONTROL_FAILED_PREFIX = "ControlFailed:";
@@ -147,6 +163,24 @@ export function circulationErrorText(code: string): string {
     return `对端耳机控制失败：${errorCategoryLabel(code.slice(CONTROL_FAILED_PREFIX.length))}`;
   }
   return ERROR_TEXT[code] ?? `流转失败（${code}）`;
+}
+
+export function pullOutcomeFeedback(code: string): PullFeedback {
+  switch (code) {
+    case "Acquired":
+      return { kind: "success", tone: "success", title: "已接到这台电脑" };
+    case "AlreadyConnected":
+      return { kind: "success", tone: "success", title: "耳机已连接到这台电脑" };
+    case "AcquiredWithPeersUnreachable":
+      return {
+        kind: "unreachable",
+        tone: "warning",
+        title: "已接到这台电脑",
+        detail: "联系不上任何对端",
+      };
+    default:
+      return { kind: "success", tone: "success", title: "已接到这台电脑" };
+  }
 }
 
 function slotText(label: string, value: number | null): string {
@@ -173,6 +207,8 @@ export function remoteHeadsetView(
     peerId: peer.id,
     peerName: peer.name,
     available: peer.available,
+    holds,
+    headsetId: reading.headset_id,
     headsetName: reading.headset_name,
     batteryText: remoteBatteryText(reading.battery),
     confirmedMode: reading.noise_mode?.toLowerCase() ?? null,
@@ -204,6 +240,11 @@ export interface CirculationController {
   pairingCode: () => string;
   devPeer: () => DevPeerStatus | null;
   devPairing: () => DevPeerPairingInfo | null;
+  pullingAddress: () => string | null;
+  pullFeedback: () => PullFeedback | null;
+  lastRemoteAddress: () => string | null;
+  currentOutput: () => string | null;
+  soundSettingsAvailable: () => boolean;
   selectNearbyPeer: (peerId: string | null) => void;
   setPairingCode: (code: string) => void;
   offerPairing: () => Promise<void>;
@@ -211,11 +252,24 @@ export interface CirculationController {
   forget: (peerId: string) => Promise<void>;
   refreshPeer: (peerId: string) => Promise<void>;
   setRemoteNoiseMode: (peerId: string, mode: string) => Promise<void>;
+  pull: (address: string) => Promise<void>;
+  clearPullFeedback: () => void;
+  refreshAudioState: () => Promise<void>;
+  openSoundSettings: () => void;
   clearError: () => void;
   devAddPeer: () => Promise<void>;
   devOpenPeerPairing: () => Promise<void>;
   devSetPeerOnline: (online: boolean) => Promise<void>;
   devSetPeerLatencyMs: (millis: number) => void;
+  devSetPeerYieldRefusal: (reason: string | null, peerId?: string | null) => void;
+  devSetPeerNoAnswer: (noAnswer: boolean, peerId?: string | null) => void;
+  devSetLocalAcquireRefusal: (reason: string | null) => void;
+  devSetSoundSettingsAvailable: (available: boolean) => void;
+}
+
+function findRemoteAddress(snap: CirculationSnapshot): string | null {
+  const holder = snap.pairedPeers.find((peer) => peer.available && peer.reading.headset_id !== null);
+  return holder?.reading.headset_id ?? null;
 }
 
 export function createCirculationController(
@@ -223,16 +277,31 @@ export function createCirculationController(
   development: boolean,
 ): CirculationController {
   const circulation = new OpenRoseCirculation(client);
-  const snapshot = signal<CirculationSnapshot>(circulation.snapshot() as CirculationSnapshot);
+  const initialSnapshot = circulation.snapshot() as CirculationSnapshot;
+  const snapshot = signal<CirculationSnapshot>(initialSnapshot);
   const busy = signal(false);
   const actionError = signal<string | null>(null);
   const selectedPeerId = signal<string | null>(null);
   const pairingCode = signal("");
   const devPeer = signal<DevPeerStatus | null>(null);
   const devPairing = signal<DevPeerPairingInfo | null>(null);
+  const pullingAddress = signal<string | null>(null);
+  const pullFeedback = signal<PullFeedback | null>(null);
+  const lastRemoteAddress = signal<string | null>(findRemoteAddress(initialSnapshot));
+  const currentOutput = signal<string | null>(null);
+  const soundSettingsAvailable = signal<boolean>(circulation.soundSettingsAvailable());
+  let disposed = false;
 
-  const stop = circulation.subscribe((next) => snapshot.set(next as CirculationSnapshot));
+  const stop = circulation.subscribe((next) => {
+    const typed = next as CirculationSnapshot;
+    snapshot.set(typed);
+    const seenAddress = findRemoteAddress(typed);
+    if (seenAddress !== null) {
+      lastRemoteAddress.set(seenAddress);
+    }
+  });
   cleanup(() => {
+    disposed = true;
     stop();
     circulation.dispose();
   });
@@ -258,6 +327,23 @@ export function createCirculationController(
     }
   }
 
+  async function refreshAudioState() {
+    if (disposed) return;
+    soundSettingsAvailable.set(circulation.soundSettingsAvailable());
+    try {
+      const output = await circulation.currentOutput();
+      if (!disposed) {
+        currentOutput.set(output ?? null);
+      }
+    } catch {
+      if (!disposed) {
+        currentOutput.set(null);
+      }
+    }
+  }
+
+  void refreshAudioState();
+
   function refreshDevPeer() {
     devPeer.set((circulation.devPeerStatus() as DevPeerStatus | null) ?? null);
   }
@@ -272,6 +358,11 @@ export function createCirculationController(
     pairingCode: () => pairingCode(),
     devPeer: () => devPeer(),
     devPairing: () => devPairing(),
+    pullingAddress: () => pullingAddress(),
+    pullFeedback: () => pullFeedback(),
+    lastRemoteAddress: () => lastRemoteAddress(),
+    currentOutput: () => currentOutput(),
+    soundSettingsAvailable: () => soundSettingsAvailable(),
     selectNearbyPeer: (peerId) => selectedPeerId.set(peerId),
     setPairingCode: (code) => pairingCode.set(code),
     offerPairing: () => run(() => circulation.offerPairing()),
@@ -291,6 +382,52 @@ export function createCirculationController(
         if (!session) return;
         await circulation.setRemoteNoiseMode(peerId, session, mode);
       }),
+    pull: async (address) => {
+      if (pullingAddress() !== null) {
+        pullFeedback.set({
+          kind: "error",
+          tone: "warning",
+          title: circulationErrorText("PullInProgress"),
+        });
+        return;
+      }
+      pullingAddress.set(address);
+      pullFeedback.set({
+        kind: "in_progress",
+        tone: "accent",
+        title: "正在将耳机接到这台电脑…",
+      });
+      try {
+        const outcome = await circulation.pull(address);
+        if (!disposed) {
+          pullFeedback.set(pullOutcomeFeedback(outcome));
+          void refreshAudioState();
+        }
+      } catch (cause) {
+        if (!disposed) {
+          const code = cause instanceof Error ? cause.message : String(cause);
+          pullFeedback.set({
+            kind: "error",
+            tone: "danger",
+            title: circulationErrorText(code),
+          });
+        }
+      } finally {
+        if (!disposed) {
+          pullingAddress.set(null);
+        }
+      }
+    },
+    clearPullFeedback: () => pullFeedback.set(null),
+    refreshAudioState,
+    openSoundSettings: () => {
+      actionError.set(null);
+      try {
+        circulation.openSoundSettings();
+      } catch (cause) {
+        actionError.set(cause instanceof Error ? cause.message : String(cause));
+      }
+    },
     clearError: () => {
       actionError.set(null);
       circulation.clearError();
@@ -311,5 +448,14 @@ export function createCirculationController(
         refreshDevPeer();
       }),
     devSetPeerLatencyMs: (millis) => circulation.devSetPeerLatencyMs(millis),
+    devSetPeerYieldRefusal: (reason, peerId = null) =>
+      circulation.devSetPeerYieldRefusal(reason, peerId),
+    devSetPeerNoAnswer: (noAnswer, peerId = null) =>
+      circulation.devSetPeerNoAnswer(noAnswer, peerId),
+    devSetLocalAcquireRefusal: (reason) => circulation.devSetLocalAcquireRefusal(reason),
+    devSetSoundSettingsAvailable: (available) => {
+      circulation.devSetSoundSettingsAvailable(available);
+      soundSettingsAvailable.set(circulation.soundSettingsAvailable());
+    },
   };
 }

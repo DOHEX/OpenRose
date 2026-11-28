@@ -342,3 +342,32 @@ test("a remote holder paired while this device is not connected leaves the local
   await app.waitFor("id:tray-status-badge");
   expect(app.shows("text:已连接")).toBe(true);
 });
+
+test("tray panel shows current system output and pulls a remote headset to this machine", async () => {
+  const app = await openApp();
+  await app.press("id:nav-circulation");
+  await app.press("id:btn-circ-dev-add");
+  await app.waitFor("id:circ-dev-peer");
+  await app.press("id:btn-circ-dev-open");
+  await app.waitFor("id:circ-dev-code");
+  await app.waitFor("id:circ-nearby-0");
+  const code = app.texts().find((text) => /^\d{6}$/.test(text));
+  expect(code).toBeDefined();
+  await app.press("id:btn-circ-select-0");
+  await app.type("id:circ-code-input", code!);
+  await app.press("id:btn-circ-pair");
+  await app.waitFor("id:btn-circ-pull-0");
+
+  await openPanel(app);
+  await app.waitFor("id:tray-current-output");
+  expect(app.shows("text:当前输出：内置扬声器")).toBe(true);
+  expect(app.shows("id:tray-remote-card")).toBe(true);
+  expect(app.shows("id:tray-btn-pull")).toBe(true);
+
+  await app.press("id:tray-btn-pull");
+  await app.waitFor("text:已接到这台电脑");
+  expect(app.shows("id:tray-remote-card")).toBe(false);
+  await app.waitFor("id:tray-status-badge");
+  expect(app.shows("text:已连接")).toBe(true);
+  expect(app.shows("text:当前输出：内置扬声器")).toBe(true);
+});
