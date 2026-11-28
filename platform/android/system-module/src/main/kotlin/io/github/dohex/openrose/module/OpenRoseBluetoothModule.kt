@@ -61,6 +61,7 @@ class OpenRoseBluetoothModule : XposedModule() {
     private var hostStarted = false
 
     override fun onModuleLoaded(param: ModuleLoadedParam) {
+        System.setProperty("jna.nounpack", "true")
         processName = param.processName
         log(Log.INFO, TAG, "module_loaded process=${param.processName} api=$apiVersion")
     }

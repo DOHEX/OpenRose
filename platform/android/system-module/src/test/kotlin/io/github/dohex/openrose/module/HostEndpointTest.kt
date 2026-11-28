@@ -49,6 +49,7 @@ import io.github.dohex.openrose.core.transport.RawProfileSnapshot
 import io.github.dohex.openrose.ffi.coreWireFormatVersion
 import io.github.dohex.openrose.ffi.drivers.ControlTransportAdapter
 import io.github.dohex.openrose.ffi.drivers.PlatformDrivers
+import io.github.dohex.openrose.ffi.drivers.SimulatedDrivers
 import io.github.dohex.openrose.ffi.drivers.SppLink
 import io.github.dohex.openrose.ffi.encodeToBytes
 import io.github.dohex.openrose.ffi.kotlincore.CoreControlRuntime
@@ -222,7 +223,7 @@ class HostEndpointTest {
 
     @Test
     fun onlyAnAcknowledgedAndStillCurrentReadingCanBeRefreshedWithoutItsPayload() = runBlocking<Unit> {
-        val drivers = TestHeadsetDrivers(connected = true)
+        val drivers = SimulatedDrivers()
         val target = BridgeTarget.BLUETOOTH
         val hostScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         lateinit var runtime: CoreControlRuntime
@@ -266,7 +267,7 @@ class HostEndpointTest {
             assertTrue(heartbeat.containsKey(BridgeWire.CAPTURED_ELAPSED_MILLIS))
             assertFalse(heartbeat.containsKey(BridgeWire.SNAPSHOT))
 
-            drivers.inject("09ff00000106040b00011f")
+            drivers.gatts.last().inject("09ff00000106040b00011f")
             awaitCondition("game mode change invalidates confirmed read") { !current().containsKey(BridgeWire.READ_SEQUENCE) }
 
             val refreshedRequest = current().apply { putString(BridgeWire.LEASE_ID, lease) }

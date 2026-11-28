@@ -57,7 +57,7 @@ class AuthenticatedBridgeClientPollTest {
             assertEquals(listOf("clear", "watch host#2", "read host#2", "ack host#2", "snapshot host#2 host#2"), events)
         } finally {
             reader.unPause()
-            assertTrue(client.close())
+            client.handler.looper.quitSafely()
         }
     }
 
@@ -101,7 +101,7 @@ class AuthenticatedBridgeClientPollTest {
             assertEquals(listOf("read host#1", "clear"), events)
         } finally {
             reader.unPause()
-            assertTrue(client.close())
+            client.handler.looper.quitSafely()
         }
     }
 
@@ -132,7 +132,7 @@ class AuthenticatedBridgeClientPollTest {
             assertTrue("snapshot host#1" in events, "$events")
         } finally {
             reader.unPause()
-            assertTrue(client.close())
+            client.handler.looper.quitSafely()
         }
     }
 

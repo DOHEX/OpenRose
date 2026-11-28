@@ -51,6 +51,7 @@ interface SystemEntry {
     suspend fun claimPrompt(reference: SessionReference, promptId: String): Boolean
 }
 
+@Suppress("TooManyFunctions")
 class SystemEntryRuntime(
     private val control: ControlRuntime,
     private val scope: CoroutineScope,
@@ -72,8 +73,10 @@ class SystemEntryRuntime(
 
     val presentation: StateFlow<SystemPresentationState> = PresentationFlow()
 
-    internal val presentationInputs: Flow<Pair<IslandPrompt?, IntegrationSettings>> =
-        combine(prompts, integrationSettings) { state, settings -> state.prompt to settings }.distinctUntilChanged()
+    internal fun <T> presented(source: Flow<T>, state: (T) -> ControlState): Flow<Pair<T, SystemPresentationState>> {
+        val inputs = combine(source, prompts, integrationSettings) { value, _, settings -> value to present(state(value), settings) }
+        return inputs.distinctUntilChanged()
+    }
 
     init {
         scope.launch(start = CoroutineStart.UNDISPATCHED) { control.state.collect { advance() } }

@@ -61,7 +61,7 @@ class NativeHeadsetDirectoryTest {
     }
 
     @Test
-    fun everyAddressEitherSourceNamedStaysManagedUntilClosed() {
+    fun everyAddressEitherSourceNamedStaysManaged() {
         directory.publishSession(session())
         directory.publishSession(null)
         directory.publishBonded(setOf(other))
@@ -72,9 +72,5 @@ class NativeHeadsetDirectoryTest {
         assertTrue(directory.isManaged(other))
         assertFalse(directory.isManaged("12:34:56:78:9A:BC"))
         assertFalse(directory.isManaged(null))
-
-        directory.clear()
-        assertFalse(directory.isManaged(ble))
-        assertFalse(directory.identifies(other))
     }
 }

@@ -148,21 +148,6 @@ internal class SystemPromptMedia(private val targetContext: Context, private val
         }
     }
 
-    fun close() {
-        val (assets, callbacks, graceDeadline) = synchronized(assetLock) {
-            val current = ownedAssets.values.toList()
-            val pending = current.mapNotNull { it.cleanup }.distinct()
-            val grace = current.maxOfOrNull { it.readGraceDeadlineElapsed } ?: 0L
-            ownedAssets.clear()
-            Triple(current, pending, grace)
-        }
-        callbacks.forEach(handler::removeCallbacks)
-        val remainingGrace = (graceDeadline - SystemClock.elapsedRealtime())
-            .coerceIn(0L, URI_RELEASE_GRACE_MILLIS)
-        if (remainingGrace > 0L) SystemClock.sleep(remainingGrace)
-        releaseAssets(assets.map { it.clip })
-    }
-
     private data class ClipSpec(val side: String, val targetRawName: String, val moduleRawName: String)
     private data class RawResource(val context: Context, val resourceId: Int)
     private data class OwnedAsset(

@@ -11,8 +11,6 @@ import java.util.WeakHashMap
 internal class NativeBinderBindings(private val directory: NativeHeadsetDirectory) {
     private val binderAddress = Collections.synchronizedMap(WeakHashMap<Any, BinderAddress>())
 
-    fun clear() = binderAddress.clear()
-
     fun rememberAddress(owner: Any?, address: String?) {
         if (owner == null || !directory.identifies(address)) return
         val normalized = normalizeBluetoothAddress(address) ?: return

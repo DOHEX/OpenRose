@@ -20,7 +20,6 @@ internal class MiLinkPropertyUpdates(
     private val directory: NativeHeadsetDirectory,
     private val hooks: NativeHeadsetHooks,
     private val module: XposedModule,
-    private val isClosed: () -> Boolean,
 ) {
     private val callbackHandler = Handler(Looper.getMainLooper())
 
@@ -86,7 +85,7 @@ internal class MiLinkPropertyUpdates(
         fun isCurrent(): Boolean = remembered.get() === binding && directory.session(binding.address)?.reference == binding.reference
         if (!isCurrent()) return
         callbackHandler.post {
-            if (isClosed() || !isCurrent()) return@post
+            if (!isCurrent()) return@post
             if (normalizeBluetoothAddress(bluetoothAddress(device)) != binding.address) return@post
             invokePropertyChangeListener(controller, device, updateType)
         }
@@ -128,12 +127,6 @@ internal class MiLinkPropertyUpdates(
             current = current.superclass
         }
         return null
-    }
-
-    fun close() {
-        lastPublished = null
-        remembered.set(null)
-        callbackHandler.removeCallbacksAndMessages(null)
     }
 
     private companion object {

@@ -9,7 +9,6 @@ import io.github.dohex.openrose.androidintegration.HostFacts
 import io.github.dohex.openrose.androidintegration.HostFrame
 import io.github.dohex.openrose.androidintegration.HostLease
 import io.github.dohex.openrose.androidintegration.HostOpenResult
-import io.github.dohex.openrose.androidintegration.HostPlatformFacts
 import io.github.dohex.openrose.androidintegration.HostRejection
 import io.github.dohex.openrose.androidintegration.HostStatus
 import io.github.dohex.openrose.androidintegration.OwnerGeneration
@@ -24,7 +23,6 @@ import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.SessionReference
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.TransportUnavailableReason
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.ffi.CoreDecodeResult
@@ -37,7 +35,6 @@ import uniffi.openrose_control.HostPlatform
 import uniffi.openrose_control.PlatformApplicability
 import uniffi.openrose_control.PlatformState
 import uniffi.openrose_control.ScanState
-import kotlin.io.encoding.Base64
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -105,52 +102,34 @@ class HostWireTest {
     }
 
     @Test
-    fun aHostFrameCarriesPlatformFactsAndSnapshotBytesAcrossTheWire() {
+    fun aHostFrameCarriesItsSnapshotAsCoreBytes() {
         val snapshot = testSnapshot()
-        val facts = HostPlatformFacts(PermissionState.GRANTED, TransportAvailability.Available, scanPermission = PermissionState.DENIED)
-        val frame = HostFrame(generation, holder, facts, snapshot, SystemPresentationState(), HostFacts(presentation = mapOf("k" to "v")))
+        val frame = HostFrame(generation, holder, snapshot, SystemPresentationState(), HostFacts(presentation = mapOf("k" to "v")))
 
-        val encoded = HostFrameWire.encode(frame) as Wire.Obj
-        assertEquals(frame, HostFrameWire.decodeFrame(parseWire(encoded.render())))
-
-        val platformObj = encoded.field("platform") as Wire.Obj
-        val withoutScanPermission = Wire.Obj(encoded.fields + ("platform" to Wire.Obj(platformObj.fields - "scanPermission")))
-        assertFailsWith<WireFormatException> { HostFrameWire.decodeFrame(withoutScanPermission) }
-
-        for (transport in listOf(
-            TransportAvailability.Unavailable(TransportUnavailableReason.NoAdapter),
-            TransportAvailability.Unavailable(TransportUnavailableReason.UnsupportedPlatform("macOS")),
-            TransportAvailability.Unavailable(TransportUnavailableReason.MissingDependency("libdbus")),
-            TransportAvailability.Unavailable(TransportUnavailableReason.BackendUnavailable("dbus error")),
-        )) {
-            val unavailableFacts = HostPlatformFacts(PermissionState.GRANTED, transport)
-            val unavailableFrame = frame.copy(platform = unavailableFacts)
-            assertEquals(unavailableFacts, HostFrameWire.decodeFrame(HostFrameWire.encode(unavailableFrame)).platform)
-        }
+        val encoded = HostFrameWire.encode(frame)
+        assertEquals(frame, HostFrameWire.decodeFrame(EncodedHostFrame(parseWire(encoded.payload.render()), encoded.snapshot)))
+        assertEquals(snapshot.encodeToBytes().toList(), encoded.snapshot.toList())
     }
 
     @Test
     fun malformedAndUnsupportedSnapshotBytesFailWithATypedException() {
         val snapshot = testSnapshot()
-        val wire = HostFrameWire.encode(
-            HostFrame(generation, holder, HostPlatformFacts(PermissionState.GRANTED, TransportAvailability.Available), snapshot, SystemPresentationState()),
-        ) as Wire.Obj
+        val encoded = HostFrameWire.encode(HostFrame(generation, holder, snapshot, SystemPresentationState()))
 
-        val malformedPayload = Wire.Obj(wire.fields + ("snapshot" to str(Base64.encode("corrupt".encodeToByteArray()))))
-        val malformedError = assertFailsWith<HostSnapshotFormatException> { HostFrameWire.decodeFrame(malformedPayload) }
+        val malformedError = assertFailsWith<HostSnapshotFormatException> {
+            HostFrameWire.decodeFrame(EncodedHostFrame(encoded.payload, "corrupt".encodeToByteArray()))
+        }
         assertIs<CoreDecodeResult.Error.Malformed>(malformedError.error)
 
         val wrongVersionBytes = snapshot.encodeToBytes().apply {
             this[3] = (coreWireFormatVersion().toInt() + 1).toByte()
         }
-        val unsupportedPayload = Wire.Obj(wire.fields + ("snapshot" to str(Base64.encode(wrongVersionBytes))))
-        val versionError = assertFailsWith<HostSnapshotFormatException> { HostFrameWire.decodeFrame(unsupportedPayload) }
+        val versionError = assertFailsWith<HostSnapshotFormatException> {
+            HostFrameWire.decodeFrame(EncodedHostFrame(encoded.payload, wrongVersionBytes))
+        }
         val unsupported = assertIs<CoreDecodeResult.Error.UnsupportedVersion>(versionError.error)
         assertEquals(coreWireFormatVersion(), unsupported.expected)
         assertEquals((coreWireFormatVersion().toInt() + 1).toUByte(), unsupported.actual)
-
-        val badBase64 = Wire.Obj(wire.fields + ("snapshot" to str("%%%")))
-        assertFailsWith<WireFormatException> { HostFrameWire.decodeFrame(badBase64) }
     }
 
     private fun testSnapshot(): ControlSnapshot = ControlSnapshot(

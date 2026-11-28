@@ -23,11 +23,8 @@ internal class SystemPresentationRenderer(
     context: Context,
     private val handler: Handler,
     private val callbacks: PresentationCallbacks,
-) : AutoCloseable {
+) {
     private val appContext = context.applicationContext ?: context
-    private val lifecycleLock = Any()
-
-    @Volatile private var closed = false
     private var current: RenderedSnapshot? = null
     private val reportedStatus = mutableMapOf<String, String>()
     private var aliasReceiverRegistered = false
@@ -36,13 +33,13 @@ internal class SystemPresentationRenderer(
             if (intent?.action != BluetoothDevice.ACTION_ALIAS_CHANGED) return
             dispatchOnHandler {
                 val active = current ?: return@dispatchOnHandler
-                if (!closed && statusNotification.active) statusNotification.render(active, null)
+                if (statusNotification.active) statusNotification.render(active, null)
             }
         }
     }
     private val notifications = PresentationNotifications(appContext)
     private val actionSession: PresentationActionSession = object : PresentationActionSession {
-        override val currentSnapshot: RenderedSnapshot? get() = if (closed) null else current
+        override val currentSnapshot: RenderedSnapshot? get() = current
         override val statusActive: Boolean get() = statusNotification.active
         override fun reportActionFailure(snapshot: Bundle, detail: String) {
             reportOnce(snapshot, BridgePresentationWire.STATUS_NOTIFICATION, BridgePresentationWire.ACTION_FAILED, detail)
@@ -61,28 +58,11 @@ internal class SystemPresentationRenderer(
     )
 
     fun render(snapshot: Bundle, native: NativeHeadsetSnapshot) {
-        if (closed) return
         val safeSnapshot = Bundle(snapshot)
-        dispatchOnHandler {
-            if (!closed) renderOnHandler(safeSnapshot, native)
-        }
+        dispatchOnHandler { renderOnHandler(safeSnapshot, native) }
     }
 
-    fun clear() {
-        if (closed) return
-        dispatchOnHandler(::clearOnHandler)
-    }
-
-    override fun close() {
-        synchronized(lifecycleLock) {
-            if (closed) return
-            closed = true
-        }
-        actions.shutdown()
-        dispatchOnHandler(::clearOnHandler)
-    }
-
-    fun awaitActionTermination(timeoutMillis: Long): Boolean = actions.awaitTermination(timeoutMillis)
+    fun clear() = dispatchOnHandler(::clearOnHandler)
 
     private fun renderOnHandler(snapshot: Bundle, native: NativeHeadsetSnapshot) {
         val decoded = decodePresentationSnapshot(snapshot, native) ?: return

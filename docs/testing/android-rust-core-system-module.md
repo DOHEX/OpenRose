@@ -70,16 +70,34 @@ linker 报错出现在 `UnsatisfiedLinkError` 的消息里（`native_library_loa
 
 ## 通过与失败
 
-按 ADR 0038 的门槛，在第 8 步的同一个系统蓝牙 pid 内，下面四条全部满足才算通过：
+按 ADR 0038 的门槛，在试验连接与读数所在的同一个系统蓝牙 pid 内，下面四条全部满足才算通过：
 
 | 判据 | 通过 | 失败 |
 | --- | --- | --- |
 | 加载 | 两条 `native_library_loaded`（`jnidispatch`、`openrose_ffi`）都出现。 | 任一条出现 `native_library_load_failed`、`trial_control_start_failed`，或没有 `trial_start`。 |
 | 连接与读数 | 出现 `connection=connected … profile=I5_ZT`，且至少一条 `reading field=… value=Known(…)`（含电量），在 `connect_start` 后 2 分钟内。 | `connect_result … result=failure`，或超时仍停在 `connecting`，或只有 `Loading` 没有 `Known`。 |
-| SELinux 与 linker | 从第 7 步到连接完成，没有属于系统蓝牙域、涉及模块 APK 或这两个库的 `avc: denied`，也没有 `dlopen failed`。 | 出现任何一条，不论 `permissive`。 |
+| SELinux 与 linker | 从试验启动到连接完成，没有属于系统蓝牙域、涉及模块 APK 或这两个库的 `avc: denied`，也没有 `dlopen failed`。 | 出现任何一条，不论 `permissive`。 |
 | 进程 | 系统蓝牙 pid 在这一段内不变，`crash` 缓冲区与 `am_crash` 没有新条目，蓝牙开关与已有的耳机音频连接保持正常。 | pid 改变、崩溃或蓝牙不可用。 |
 
-第 9 步的热重载拒绝是附加核对，不属于门槛，但它是 ADR 0038 对系统模块的要求，需要一并记录。
+热重载拒绝是附加核对，不属于门槛，但它是 ADR 0038 对系统模块的要求，需要一并记录；做法与预期日志见下一节。
+
+## 热重载拒绝核对（待测）
+
+`OpenRoseBluetoothModule.onHotReloading` 记录一行警告并返回 `false`，拒绝 LSPosed 的热重载：ART 不允许另一个 ClassLoader 再次加载同一个 `.so`，旧代的原生代码也不会被卸载（[ADR 0038](../adr/0038-rust-core-and-nsh-desktop.md)）。单元测试 `OpenRoseBluetoothModuleReloadRefusalTest` 只覆盖返回值与宿主不被打扰，真机上 LSPosed 是否经过这条路径未验证。
+
+做法：
+
+1. 条件同上，模块已启用，作用域含 `com.android.bluetooth`，并已连上耳机；记下系统蓝牙 pid（`adb shell pidof com.android.bluetooth`）。
+2. `adb logcat -c`，随后用 `adb install -r` 安装同一个版本号的 OpenRose APK，使 LSPosed 对已加载的模块发起热重载。
+3. 抓取 `adb logcat -d -s OpenRoseSystemModule`、`adb logcat -b crash -d`，并再次记下系统蓝牙 pid。
+
+预期日志（标签 `OpenRoseSystemModule`，`W` 级别，每次重载请求一行）：
+
+```text
+W/OpenRoseSystemModule: hot_reload_refused; restart the integration scope to apply the update
+```
+
+通过：出现上面这一行；系统蓝牙 pid 不变；`crash` 缓冲区没有新条目；耳机连接与应用里的读数保持正常；新安装的代码在「重启作用域」之后才生效。失败：没有这一行却出现第二份 `module_loaded`、pid 改变、崩溃，或 `UnsatisfiedLinkError`（说明旧代被重载）。结果写进下面的「实测结果」，没有做就写“未验证”。
 
 ## 记录
 
@@ -115,7 +133,7 @@ linker 报错出现在 `UnsatisfiedLinkError` 的消息里（`native_library_loa
 | 连接与读数 | **通过** | `CONNECTING` → `DISCOVERING` → `SUBSCRIBING` → `INITIALIZING` → `connected (headset=D1:02:03:04:14:87, profile=I5_ZT)`，约 2 秒内完成全量读数（`LEFT_BATTERY=93`、`RIGHT_BATTERY=92`、`CASE_BATTERY=NotProvided(ff)`、`NOISE_MODE=wind`、`EQ=hifi`、`AUDIO_MODE=ldac`、`FIRMWARE=125` 等）并返回 `connect_result ... result=success`。 |
 | SELinux 与 linker | **通过** | `u:r:bluetooth:s0` 下无针对模块 APK 或两库的 `avc: denied`，无 `dlopen failed` / `UnsatisfiedLinkError`。 |
 | 进程稳定性 | **通过** | `com.android.bluetooth` PID 全程保持 `29915`，无 `SIGSEGV` / `FATAL EXCEPTION`；还原 `control_way=module` 后触发 `trial_stopped reason=module_control_selected` 干净退出。 |
-| 第 9 步热重载拒绝 | **未验证** | 本次试验未执行第 9 步 LSPosed 模块热重载测试。 |
+| 热重载拒绝 | **未验证** | 本次试验未执行[热重载拒绝核对](#热重载拒绝核对待测)。 |
 
 关键日志摘录（PID `29915`）：
 
