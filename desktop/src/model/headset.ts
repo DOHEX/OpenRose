@@ -587,10 +587,6 @@ export function createHeadsetController(): HeadsetController {
     }
   }
 
-  async function executeCommand(commandJson: string, expectedSession: number | null) {
-    await client.executeCommand(commandJson, expectedSession);
-  }
-
   async function switchSimulatedHeadset(modelId: string, firmware: string) {
     if (devBusy()) return false;
     devBusy.set(true);
@@ -631,7 +627,6 @@ export function createHeadsetController(): HeadsetController {
     await client.refreshBondedHeadsets();
     snapshot.set(client.snapshot() as ControlSnapshot);
   }
-
 
   async function executeCommand(commandJson: string, expectedSession: number | null) {
     await OpenRoseSettings.executeCommand(client, commandJson, expectedSession);

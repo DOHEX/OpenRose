@@ -31,6 +31,14 @@ function capabilities(overrides: Partial<HeadsetCapabilities> = {}): HeadsetCapa
       minimum_cycle_selections: 0,
     },
     equalizer: null,
+    touch_control: null,
+    tap_control: null,
+    audio_control: null,
+    prompt_volume_levels: [],
+    gain_levels: [],
+    hearing_protection_levels: [],
+    bass_boost_levels: [],
+    prompt_languages: [],
     spatial_modes: [],
     spatial_contents: [],
     ...overrides,
@@ -219,12 +227,12 @@ test("panel controls default to the first three, reorder and intersect with mode
 
   const full = capabilities({
     writable_settings: ["GameMode", "Eq", "SpatialMode", "IndependentMicMode"],
-    equalizer: { presets: ["pop"] },
+    equalizer: { presets: ["pop"], custom: null },
     spatial_modes: ["off", "fixed"],
   });
   const noSpatial = capabilities({
     writable_settings: ["GameMode", "Eq"],
-    equalizer: { presets: ["pop"] },
+    equalizer: { presets: ["pop"], custom: null },
   });
   expect(supportedTrayControls(DEFAULT_TRAY_PANEL_SETTINGS, full)).toEqual(["game_mode", "equalizer"]);
 
