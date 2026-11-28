@@ -1,4 +1,5 @@
 import { expect, test } from "nsh/test";
+import type { RemoteHeadsetView } from "./circulation";
 import type { ControlSnapshot, HeadsetCapabilities, NoiseFeedback } from "./headset";
 import {
   buildTrayMenuEntries,
@@ -144,6 +145,38 @@ test("tray icon follows the control connection and the tooltip starts with the a
   expect(trayTooltip(false, connected)).toBe("OpenRose");
   expect(trayTooltip(true, connected)).toBe("EarFree i5 · 已连接\n左 95% · 右 98%");
   expect(trayTooltip(true, disconnected)).toBe("EarFree i5 · 本机未连接");
+});
+
+const REMOTE_HOLDER: RemoteHeadsetView = {
+  peerId: "p1",
+  peerName: "模拟手机",
+  available: true,
+  headsetName: "EarFree i7",
+  batteryText: "左 80% · 右 78% · 盒 90%",
+  confirmedMode: "anc",
+  modes: ["anc", "normal"],
+  pendingMode: null,
+  canSwitch: true,
+  session: { peer_id: "p1", headset_id: "sim:1", token: "t" },
+};
+
+test("a paired peer holding a headset shows the remote icon and its headset in the tooltip when this device is not connected", () => {
+  const remote = computeTraySummary(controller(snapshot({ connected: false })), REMOTE_HOLDER);
+  expect(trayIconState(remote)).toBe("remote");
+  expect(trayTooltip(false, remote)).toBe("OpenRose");
+  expect(trayTooltip(true, remote)).toBe("EarFree i7 · 模拟手机\n左 80% · 右 78% · 盒 90%");
+});
+
+test("the local connection wins over a remote holder", () => {
+  const local = computeTraySummary(controller(snapshot({ connected: true })), REMOTE_HOLDER);
+  expect(trayIconState(local)).toBe("connected");
+  expect(trayTooltip(true, local)).toBe("EarFree i5 · 已连接\n左 95% · 右 98%");
+});
+
+test("without a remote holder the tray state is unchanged", () => {
+  const none = computeTraySummary(controller(snapshot({ connected: false })), null);
+  expect(trayIconState(none)).toBe("disconnected");
+  expect(trayTooltip(true, none)).toBe("EarFree i5 · 本机未连接");
 });
 
 test("tray menu lists state, battery and noise modes and binds them to the state it was built from", () => {

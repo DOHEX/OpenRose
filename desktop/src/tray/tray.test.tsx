@@ -317,3 +317,28 @@ test("login launch starts in tray only when background control and tray are avai
   expect(noTray.windowIds()).toContain("main");
   expect(noTray.window("main").state()?.visible).toBe(true);
 });
+
+test("a remote holder paired while this device is not connected leaves the local tray state in charge", async () => {
+  const app = await openApp();
+  await app.press("id:nav-circulation");
+  await app.press("id:btn-circ-dev-add");
+  await app.waitFor("id:circ-dev-peer");
+  await app.press("id:btn-circ-dev-open");
+  await app.waitFor("id:circ-dev-code");
+  await app.waitFor("id:circ-nearby-0");
+  const code = app.texts().find((text) => /^\d{6}$/.test(text));
+  expect(code).toBeDefined();
+  await app.press("id:btn-circ-select-0");
+  await app.type("id:circ-code-input", code!);
+  await app.press("id:btn-circ-pair");
+  await app.waitFor("id:circ-remote-name-0");
+  expect(app.shows("text:EarFree i5")).toBe(true);
+
+  await openPanel(app);
+  expect(app.shows("text:本机未连接")).toBe(true);
+  expect(app.shows("id:tray-btn-reconnect")).toBe(true);
+
+  await app.press("id:tray-btn-reconnect");
+  await app.waitFor("id:tray-status-badge");
+  expect(app.shows("text:已连接")).toBe(true);
+});

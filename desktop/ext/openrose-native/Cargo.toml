@@ -7,10 +7,13 @@ publish = false
 [workspace]
 
 [dependencies]
+async-trait = "0.1"
 nsh-core = "0.7.0"
+openrose-circulation = { path = "../../../crates/circulation" }
 openrose-control = { path = "../../../crates/control", features = ["simulator"] }
 openrose-desktop-platform = { path = "../../../crates/desktop-platform" }
 openrose-headset = { path = "../../../crates/headset" }
+qrcode = { version = "0.15", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time"] }

@@ -49,6 +49,9 @@ import { TraySettingsPage } from "./src/pages/settings/TrayControlsSettingsPage"
 import { TrayHost } from "./src/tray/TrayHost";
 import { createDesktopLifecycle } from "./src/tray/lifecycle";
 import type { DesktopLifecycle } from "./src/tray/lifecycle";
+import { createCirculationController } from "./src/model/circulation";
+import type { CirculationController } from "./src/model/circulation";
+import { CirculationPage } from "./src/pages/CirculationPage";
 import { DevModePage } from "./src/pages/DevModePage";
 import { DevScenariosPage } from "./src/pages/DevScenariosPage";
 import { createDevScenarioModel } from "./src/model/devScenarios";
@@ -73,7 +76,15 @@ import type {
   ToneVariant,
 } from "./src/ui";
 
-type DesktopPageId = "headset" | "add-headset" | "settings" | "info" | "diagnostics" | "tray" | "dev";
+type DesktopPageId =
+  | "headset"
+  | "add-headset"
+  | "settings"
+  | "info"
+  | "circulation"
+  | "diagnostics"
+  | "tray"
+  | "dev";
 
 const LATENCY_OPTIONS: SegmentOption[] = [
   { value: "40", label: "40 ms", testID: "latency-40" },
@@ -96,6 +107,12 @@ const NAV_ITEMS: SidebarNavItem[] = [
     accessibilityLabel: "耳机设置",
   },
   { id: "info", label: "耳机信息", testID: "nav-info", accessibilityLabel: "耳机信息" },
+  {
+    id: "circulation",
+    label: "耳机流转",
+    testID: "nav-circulation",
+    accessibilityLabel: "耳机流转",
+  },
   {
     id: "diagnostics",
     label: "诊断与记录",
@@ -131,6 +148,7 @@ function DesktopApp(props: {
   tray: TrayAvailabilityStore;
   lifecycle: DesktopLifecycle;
   loginLaunch: LoginLaunchStore;
+  circulation: CirculationController;
 }) {
   const controller = props.controller;
   const addModel = createAddHeadsetModel(controller);
@@ -616,6 +634,8 @@ function DesktopApp(props: {
                   onChangeLatency={handleLatencyChange}
                 />
               </Column>
+            ) : activePage() === "circulation" ? (
+              <CirculationPage controller={props.circulation} />
             ) : activePage() === "tray" ? (
               <TraySettingsPage
                 settings={props.settings}
@@ -668,6 +688,7 @@ function DesktopApp(props: {
 
 function DesktopRoot() {
   const controller = createHeadsetController();
+  const circulation = createCirculationController(controller.client, controller.devConfig() !== null);
   const settings = createDesktopSettingsStore();
   const tray = createTrayAvailabilityStore();
   const loginLaunch = createLoginLaunchStore();
@@ -679,7 +700,13 @@ function DesktopRoot() {
   });
   return (
     <>
-      <TrayHost controller={controller} settings={settings} tray={tray} lifecycle={lifecycle} />
+      <TrayHost
+        controller={controller}
+        circulation={circulation}
+        settings={settings}
+        tray={tray}
+        lifecycle={lifecycle}
+      />
       <Window
         id="main"
         open={lifecycle.mainOpen()}
@@ -695,6 +722,7 @@ function DesktopRoot() {
           tray={tray}
           lifecycle={lifecycle}
           loginLaunch={loginLaunch}
+          circulation={circulation}
         />
       </Window>
     </>
