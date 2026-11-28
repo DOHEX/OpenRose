@@ -73,9 +73,10 @@ class SystemEntryRuntime(
 
     val presentation: StateFlow<SystemPresentationState> = PresentationFlow()
 
-    internal fun <T> presented(source: Flow<T>, state: (T) -> ControlState): Flow<Pair<T, SystemPresentationState>> = combine(source, prompts, integrationSettings) { value, _, settings ->
-        value to present(state(value), settings)
-    }.distinctUntilChanged()
+    internal fun <T> presented(source: Flow<T>, state: (T) -> ControlState): Flow<Pair<T, SystemPresentationState>> {
+        val inputs = combine(source, prompts, integrationSettings) { value, _, settings -> value to present(state(value), settings) }
+        return inputs.distinctUntilChanged()
+    }
 
     init {
         scope.launch(start = CoroutineStart.UNDISPATCHED) { control.state.collect { advance() } }
