@@ -1,10 +1,7 @@
 package io.github.dohex.openrose.androidintegration
 
+import io.github.dohex.openrose.androidintegration.wire.EncodedHostFrame
 import io.github.dohex.openrose.androidintegration.wire.HostSnapshotFormatException
-import io.github.dohex.openrose.androidintegration.wire.Wire
-import io.github.dohex.openrose.androidintegration.wire.parseWire
-import io.github.dohex.openrose.androidintegration.wire.render
-import io.github.dohex.openrose.androidintegration.wire.str
 import io.github.dohex.openrose.core.ControlErrorCode
 import io.github.dohex.openrose.core.ControlRuntime
 import io.github.dohex.openrose.core.HeadsetCommand
@@ -25,7 +22,6 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlin.io.encoding.Base64
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -282,11 +278,8 @@ class ModuleControlHostTest {
         rig.eventually("the module owner to become ready") { runtime.integration.value.owner.readiness == OwnerReadiness.Ready }
         val generation = requireNotNull(runtime.integration.value.owner.holder).generation
 
-        fun tamperSnapshot(raw: String, transform: (ByteArray) -> ByteArray): String {
-            val obj = parseWire(raw).asObj()
-            val updated = transform(Base64.decode(obj.str("snapshot")))
-            return Wire.Obj(obj.fields + ("snapshot" to str(Base64.encode(updated)))).render()
-        }
+        fun tamperSnapshot(encoded: EncodedHostFrame, transform: (ByteArray) -> ByteArray): EncodedHostFrame =
+            EncodedHostFrame(encoded.payload, transform(encoded.snapshot))
 
         val connection = assertIs<LinkOpenResult.Open>(rig.link.open()).connection
         try {

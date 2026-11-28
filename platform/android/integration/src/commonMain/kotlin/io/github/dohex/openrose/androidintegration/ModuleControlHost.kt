@@ -2,7 +2,6 @@ package io.github.dohex.openrose.androidintegration
 
 import io.github.dohex.openrose.core.ControlError
 import io.github.dohex.openrose.core.ControlErrorCode
-import io.github.dohex.openrose.core.ControlRuntime
 import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.OperationResult
@@ -60,7 +59,7 @@ class ModuleControlHost(
     private val maxLeases: Int = 16,
     private val facts: StateFlow<HostFacts> = MutableStateFlow(HostFacts()),
     private val presentationTiming: PresentationTiming = PresentationTiming(),
-    private val onOwnerStarted: (OwnerGeneration, CoroutineScope, ControlRuntime) -> Unit = { _, _, _ -> },
+    private val onOwnerStarted: (OwnerGeneration, CoroutineScope, CoreBackedRuntime) -> Unit = { _, _, _ -> },
 ) {
     private class Owner(
         val generation: OwnerGeneration,
@@ -234,20 +233,8 @@ class ModuleControlHost(
             }
             return callbackFlow {
                 val collector = launch {
-                    combine(active.coreState, active.runtime.presentationInputs, facts) { snapshot, _, reported ->
-                        val state = snapshot.toControlState()
-                        HostFrame(
-                            active.generation,
-                            active.holder,
-                            HostPlatformFacts(
-                                state.platform.permission,
-                                state.platform.transport,
-                                state.platform.scanPermission,
-                            ),
-                            snapshot,
-                            active.runtime.present(state),
-                            reported,
-                        )
+                    combine(active.runtime.presented(active.coreState) { it.toControlState() }, facts) { (snapshot, presentation), reported ->
+                        HostFrame(active.generation, active.holder, snapshot, presentation, reported)
                     }.distinctUntilChanged().collect { send(it) }
                 }
                 launch {

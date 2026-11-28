@@ -16,7 +16,6 @@ import io.github.dohex.openrose.androidintegration.HostFrame
 import io.github.dohex.openrose.androidintegration.HostLease
 import io.github.dohex.openrose.androidintegration.HostLinkException
 import io.github.dohex.openrose.androidintegration.HostOpenResult
-import io.github.dohex.openrose.androidintegration.HostPlatformFacts
 import io.github.dohex.openrose.androidintegration.HostStatus
 import io.github.dohex.openrose.androidintegration.LinkOpenResult
 import io.github.dohex.openrose.androidintegration.OwnerFailureStage
@@ -24,12 +23,11 @@ import io.github.dohex.openrose.androidintegration.OwnerGeneration
 import io.github.dohex.openrose.androidintegration.OwnerHolder
 import io.github.dohex.openrose.androidintegration.SystemPresentationState
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
+import io.github.dohex.openrose.androidintegration.wire.EncodedHostFrame
 import io.github.dohex.openrose.androidintegration.wire.HostFrameWire
 import io.github.dohex.openrose.androidintegration.wire.HostIdentityWire
 import io.github.dohex.openrose.androidintegration.wire.HostSnapshotFormatException
-import io.github.dohex.openrose.androidintegration.wire.Wire
 import io.github.dohex.openrose.androidintegration.wire.render
-import io.github.dohex.openrose.androidintegration.wire.str
 import io.github.dohex.openrose.bridge.BridgeBundles
 import io.github.dohex.openrose.bridge.IControlBridge
 import io.github.dohex.openrose.bridge.IControlFrames
@@ -60,7 +58,6 @@ import uniffi.openrose_control.PlatformApplicability
 import uniffi.openrose_control.PlatformState
 import uniffi.openrose_control.ScanState
 import java.util.concurrent.CountDownLatch
-import kotlin.io.encoding.Base64
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -138,20 +135,11 @@ class BinderCallsTest {
         val holder = OwnerHolder(ControlWay.MODULE, generation, "bluetooth", "bluetooth")
         val status = HostStatus.Active(generation, holder)
         val snapshot = emptySnapshot()
-        val baseWire = HostFrameWire.encode(
-            HostFrame(
-                generation,
-                holder,
-                HostPlatformFacts(PermissionState.GRANTED, TransportAvailability.Available),
-                snapshot,
-                SystemPresentationState(),
-                HostFacts(),
-            ),
-        ) as Wire.Obj
+        val baseFrame = HostFrameWire.encode(HostFrame(generation, holder, snapshot, SystemPresentationState(), HostFacts()))
         val unsupportedBytes = snapshot.encodeToBytes().apply { this[3] = (coreWireFormatVersion().toInt() + 1).toByte() }
         val payloads = listOf(
-            Wire.Obj(baseWire.fields + ("snapshot" to str(Base64.encode("corrupt".encodeToByteArray())))).render(),
-            Wire.Obj(baseWire.fields + ("snapshot" to str(Base64.encode(unsupportedBytes)))).render(),
+            EncodedHostFrame(baseFrame.payload, "corrupt".encodeToByteArray()),
+            EncodedHostFrame(baseFrame.payload, unsupportedBytes),
         )
 
         for ((index, payload) in payloads.withIndex()) {
@@ -174,7 +162,7 @@ class BinderCallsTest {
         }
     }
 
-    private fun frameBinder(generation: OwnerGeneration, status: HostStatus, payload: String): IBinder {
+    private fun frameBinder(generation: OwnerGeneration, status: HostStatus, frame: EncodedHostFrame): IBinder {
         val host = object : IControlBridge.Default() {
             override fun open(hello: Bundle, clientToken: IBinder): Bundle {
                 val authorized = HostOpenResult.Opened(HostLease("lease", ClientRole.APP, generation.incarnation), status)
@@ -182,7 +170,12 @@ class BinderCallsTest {
             }
 
             override fun watchFrames(request: Bundle, frames: IControlFrames): Bundle {
-                frames.onFrame(Bundle().apply { putString(BridgeWire.PAYLOAD, payload) })
+                frames.onFrame(
+                    Bundle().apply {
+                        putString(BridgeWire.PAYLOAD, frame.payload.render())
+                        putByteArray(BridgeWire.CORE_SNAPSHOT, frame.snapshot)
+                    },
+                )
                 return BridgeBundles.response(BridgeWire.STATUS_OK)
             }
         }

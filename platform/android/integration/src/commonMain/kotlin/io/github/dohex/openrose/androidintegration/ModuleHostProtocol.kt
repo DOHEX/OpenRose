@@ -117,16 +117,9 @@ data class HostFacts(
     val presentation: Map<String, String> = emptyMap(),
 )
 
-data class HostPlatformFacts(
-    val permission: PermissionState,
-    val transport: TransportAvailability,
-    val scanPermission: PermissionState = PermissionState.NOT_REQUIRED,
-)
-
 data class HostFrame(
     val generation: OwnerGeneration,
     val holder: OwnerHolder,
-    val platform: HostPlatformFacts,
     val snapshot: ControlSnapshot,
     val presentation: SystemPresentationState,
     val facts: HostFacts = HostFacts(),
