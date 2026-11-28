@@ -83,18 +83,3 @@ pub fn unsupported_platform_state() -> PlatformState {
     )
     .on(host)
 }
-
-pub fn bluetooth_settings_command() -> Option<Vec<String>> {
-    #[cfg(target_os = "linux")]
-    {
-        linux::settings::bluetooth_settings_command()
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        None
-    }
-}
-
-pub fn open_bluetooth_settings() -> Result<(), crate::settings::OpenSettingsError> {
-    crate::settings::open_settings(bluetooth_settings_command())
-}

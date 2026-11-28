@@ -4,35 +4,19 @@ import {
   Column,
   Divider,
   InfoRow,
+  ListItem,
   MonoText,
   MutedText,
   NoticeBanner,
   Row,
   SectionTitle,
 } from "../ui";
-import type { ToneVariant } from "../ui";
-
-export interface DiagnosticsPlatformRow {
-  label: string;
-  value: string;
-  detail?: string | null;
-  tone?: ToneVariant;
-}
-
-export interface DiagnosticsOperationItem {
-  id: number;
-  title: string;
-  stageLabel: string;
-  detail: string;
-  tone: ToneVariant;
-}
-
-export interface DiagnosticsReadingItem {
-  field: string;
-  label: string;
-  valueText: string;
-  rawHex: string;
-}
+import type {
+  DiagnosticsOperationItem,
+  DiagnosticsPlatformRow,
+  DiagnosticsReadingItem,
+  ToneVariant,
+} from "../ui";
 
 export interface DiagnosticsPageProps {
   platformRows: DiagnosticsPlatformRow[];
@@ -180,9 +164,9 @@ export function DiagnosticsPage(props: DiagnosticsPageProps) {
               open={props.rawDataOpen}
               onToggle={props.onToggleRawData}
             >
-              <Column
+              <ListItem
                 testID="diag-raw-data-panel"
-                class="gap-2 rounded-(--radius) border border-border bg-muted/40 p-3"
+                class="gap-2 p-3"
               >
                 {props.rawSessionHeader ? (
                   <MonoText testID="diag-raw-session">{props.rawSessionHeader}</MonoText>
@@ -248,7 +232,7 @@ export function DiagnosticsPage(props: DiagnosticsPageProps) {
                     </Each>
                   </Column>
                 ) : null}
-              </Column>
+              </ListItem>
             </CollapsibleSection>
           </Column>
         ) : (

@@ -1,11 +1,11 @@
-use crate::{OpenRoseClient, SHARED_RUNTIME, SystemClock, catalog_advertisement};
+use crate::{OpenRoseClient, SHARED_RUNTIME, SystemClock, catalog_advertisement, run_on_core};
 use async_trait::async_trait;
 use nsh_core::JsonValue;
 use nsh_core::prelude::*;
 use openrose_circulation::{
     CirculationConfig, CirculationNode, LocalAudio, NearbyPeer, PairingOffer, Peer, PeerDiscovery,
-    PeerId, PullOutcome, RemoteError, RemoteReading, RemoteSessionReference, YieldReceipt,
-    YieldRefusal,
+    PeerId, PullOutcome, PullStage, RemoteError, RemoteReading, RemoteSessionReference,
+    YieldReceipt, YieldRefusal,
 };
 use openrose_control::audio::{AudioFactsDriver, AudioProfile, normalize_bluetooth_address};
 use openrose_control::simulator::{SimulatedHeadsetHandle, SimulatedTransport};
@@ -19,18 +19,18 @@ use qrcode::{Color, QrCode};
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::future::Future;
 use std::net::{IpAddr, Ipv4Addr};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::sync::{mpsc, oneshot, watch};
+use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
 
 const DEFAULT_DEV_PEER_LATENCY_MS: u64 = 40;
 const DEV_RESPONSE_TIMEOUT: Duration = Duration::from_secs(2);
 const DEV_SIMULATED_OUTPUT: &str = "内置扬声器";
+const PULL_STAGE_POLL: Duration = Duration::from_millis(80);
 const APP_ID: &str = "io.github.dohex.openrose";
 
 #[derive(Clone, Serialize)]
@@ -81,17 +81,24 @@ struct CirculationSnapshot {
     pairing_offer: Option<PairingOfferView>,
     remote_readings: BTreeMap<String, RemoteReading>,
     pending_noise_writes: BTreeMap<String, String>,
+    pull_stage: Option<PullStage>,
     last_error: Option<String>,
 }
 
 #[derive(Clone, Default)]
 struct LocalMeta {
-    started: bool,
-    bound_port: Option<u16>,
     start_error: Option<String>,
     last_error: Option<String>,
     pending_noise_writes: BTreeMap<String, (u64, String)>,
-    revision: u64,
+    pull_stage: Option<PullStage>,
+}
+
+struct AbortOnDrop(JoinHandle<()>);
+
+impl Drop for AbortOnDrop {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
 }
 
 #[derive(Serialize)]
@@ -464,7 +471,6 @@ impl PendingNoiseWriteGuard {
         inner.local_meta_tx.send_modify(|meta| {
             meta.pending_noise_writes
                 .insert(pid, (write_id, mode_id));
-            meta.revision = meta.revision.wrapping_add(1);
         });
         Self {
             inner,
@@ -492,7 +498,6 @@ impl PendingNoiseWriteGuard {
                 .is_some_and(|(id, _)| *id == write_id);
             if should_remove {
                 meta.pending_noise_writes.remove(peer_id);
-                meta.revision = meta.revision.wrapping_add(1);
             }
         });
     }
@@ -570,8 +575,8 @@ impl CirculationInner {
             local_peer: LocalPeerView {
                 id: self.node.id().as_str().to_string(),
                 name: self.node.name().to_string(),
-                started: meta.started,
-                bound_port: meta.bound_port,
+                started: self.node.bound_port().is_some(),
+                bound_port: self.node.bound_port(),
                 start_error: meta.start_error,
             },
             paired_peers,
@@ -579,6 +584,7 @@ impl CirculationInner {
             pairing_offer,
             remote_readings,
             pending_noise_writes,
+            pull_stage: meta.pull_stage,
             last_error: meta.last_error,
         }
     }
@@ -589,16 +595,11 @@ impl CirculationInner {
     }
 
     fn set_last_error(&self, code: Option<String>) {
-        self.local_meta_tx.send_modify(|meta| {
-            meta.last_error = code;
-            meta.revision = meta.revision.wrapping_add(1);
-        });
+        self.local_meta_tx.send_modify(|meta| meta.last_error = code);
     }
 
     fn bump_meta(&self) {
-        self.local_meta_tx.send_modify(|meta| {
-            meta.revision = meta.revision.wrapping_add(1);
-        });
+        self.local_meta_tx.send_modify(|_| {});
     }
 
     fn record_result<T>(&self, result: Result<T, RemoteError>) -> Result<T, String> {
@@ -648,11 +649,6 @@ impl CirculationInner {
         self.record_result(self.node.pair(&PeerId::new(peer_id), trimmed).await)
     }
 
-    async fn pair_qr(&self, qr: String) -> Result<Peer, String> {
-        self.wait_started().await;
-        self.record_result(self.node.pair_qr(qr.trim()).await)
-    }
-
     async fn forget(&self, peer_id: String) -> Result<(), String> {
         self.wait_started().await;
         self.record_result(self.node.forget(&PeerId::new(peer_id)).await)
@@ -697,9 +693,12 @@ impl CirculationInner {
         self.record_result(result)
     }
 
-    async fn pull(&self, address: String) -> Result<String, String> {
+    async fn pull(self: &Arc<Self>, address: String) -> Result<String, String> {
         self.wait_started().await;
+        let poller = self.spawn_pull_stage_poller();
         let result = self.node.pull(&address).await;
+        drop(poller);
+        self.local_meta_tx.send_modify(|meta| meta.pull_stage = None);
         if matches!(
             result,
             Ok(PullOutcome::Acquired) | Err(RemoteError::AcquireFailed(_))
@@ -719,6 +718,24 @@ impl CirculationInner {
         self.record_result(result).map(pull_outcome_code)
     }
 
+    fn spawn_pull_stage_poller(self: &Arc<Self>) -> AbortOnDrop {
+        let inner = Arc::clone(self);
+        AbortOnDrop(SHARED_RUNTIME.spawn(async move {
+            let mut interval = tokio::time::interval(PULL_STAGE_POLL);
+            loop {
+                interval.tick().await;
+                let stage = inner.node.handoff_status(None).await.progress;
+                inner.local_meta_tx.send_if_modified(|meta| {
+                    if meta.pull_stage == stage {
+                        return false;
+                    }
+                    meta.pull_stage = stage;
+                    true
+                });
+            }
+        }))
+    }
+
     async fn current_output(&self) -> Result<Option<String>, String> {
         if self.dev_state.is_some() {
             return Ok(Some(DEV_SIMULATED_OUTPUT.to_string()));
@@ -728,34 +745,6 @@ impl CirculationInner {
             .ok())
     }
 
-    async fn close(&self) {
-        if let Some(handle) = self
-            .offer_expiry_task
-            .lock()
-            .expect("offer expiry task lock")
-            .take()
-        {
-            handle.abort();
-        }
-        if let Some(dev) = &self.dev_state {
-            for peer in dev.all_peers() {
-                peer.audio.set_no_answer(false);
-            }
-        }
-        self.node.close().await;
-        self.local_meta_tx.send_modify(|meta| {
-            meta.started = false;
-            meta.bound_port = None;
-            meta.pending_noise_writes.clear();
-            meta.revision = meta.revision.wrapping_add(1);
-        });
-        if let Some(dev) = &self.dev_state {
-            for peer in dev.all_peers() {
-                peer.node.close().await;
-                peer.online.store(false, Ordering::SeqCst);
-            }
-        }
-    }
     async fn dev_add_simulated_peer(&self, name: Option<String>) -> Result<DevPeerStatus, String> {
         self.wait_started().await;
         let dev = self
@@ -904,21 +893,6 @@ impl Drop for CirculationInner {
             }
         });
     }
-}
-
-fn run_circulation_core<T: Send + nsh_core::element::Ret + 'static>(
-    work: impl Future<Output = Result<T, String>> + Send + 'static,
-) -> Later<T> {
-    Later::new(async move {
-        let (tx, rx) = oneshot::channel();
-        SHARED_RUNTIME.spawn(async move {
-            let result = work.await;
-            let _ = tx.send(result);
-        });
-        rx.await
-            .map_err(|_| JsError::Error(remote_error_code(&RemoteError::ServiceClosed)))?
-            .map_err(JsError::Error)
-    })
 }
 
 fn same_dev_address(left: &str, right: &str) -> bool {
@@ -1292,18 +1266,14 @@ impl OpenRoseCirculation {
                     inner.local_meta_tx.send_modify(|meta| {
                         meta.start_error = Some(code.clone());
                         meta.last_error = Some(code);
-                        meta.revision = meta.revision.wrapping_add(1);
                     });
                 }
             } else {
                 match node.start().await {
-                    Ok(port) => {
+                    Ok(_) => {
                         if let Some(inner) = weak_start.upgrade() {
                             inner.local_meta_tx.send_modify(|meta| {
-                                meta.started = true;
-                                meta.bound_port = Some(port);
                                 meta.start_error = None;
-                                meta.revision = meta.revision.wrapping_add(1);
                             });
                         }
                     }
@@ -1313,7 +1283,6 @@ impl OpenRoseCirculation {
                             inner.local_meta_tx.send_modify(|meta| {
                                 meta.start_error = Some(code.clone());
                                 meta.last_error = Some(code);
-                                meta.revision = meta.revision.wrapping_add(1);
                             });
                         }
                     }
@@ -1363,7 +1332,7 @@ impl OpenRoseCirculation {
     /// Opens a fresh pairing window on this device and returns the 6-digit code, QR payload, and QR matrix.
     pub fn offer_pairing(&self) -> Later<JsonValue> {
         let inner = Arc::clone(&self.inner);
-        run_circulation_core(async move {
+        run_on_core(async move {
             let view = inner.offer_pairing().await?;
             Ok(serde_json::to_value(view).expect("pairing offer serializes"))
         })
@@ -1372,17 +1341,8 @@ impl OpenRoseCirculation {
     /// Pairs with a nearby discovered peer by entering its 6-digit pairing code.
     pub fn pair(&self, peer_id: String, code: String) -> Later<JsonValue> {
         let inner = Arc::clone(&self.inner);
-        run_circulation_core(async move {
+        run_on_core(async move {
             let peer = inner.pair(peer_id, code).await?;
-            Ok(serde_json::to_value(peer).expect("peer serializes"))
-        })
-    }
-
-    /// Pairs with a peer using a scanned QR payload string.
-    pub fn pair_qr(&self, qr: String) -> Later<JsonValue> {
-        let inner = Arc::clone(&self.inner);
-        run_circulation_core(async move {
-            let peer = inner.pair_qr(qr).await?;
             Ok(serde_json::to_value(peer).expect("peer serializes"))
         })
     }
@@ -1390,13 +1350,13 @@ impl OpenRoseCirculation {
     /// Unpairs a paired peer immediately and notifies it best-effort.
     pub fn forget(&self, peer_id: String) -> Later<()> {
         let inner = Arc::clone(&self.inner);
-        run_circulation_core(async move { inner.forget(peer_id).await })
+        run_on_core(async move { inner.forget(peer_id).await })
     }
 
     /// Refreshes the current headset reading from the given paired peer.
     pub fn refresh_peer(&self, peer_id: String) -> Later<JsonValue> {
         let inner = Arc::clone(&self.inner);
-        run_circulation_core(async move {
+        run_on_core(async move {
             let reading = inner.refresh_peer(peer_id).await?;
             Ok(serde_json::to_value(reading).expect("remote reading serializes"))
         })
@@ -1410,7 +1370,7 @@ impl OpenRoseCirculation {
         mode: String,
     ) -> Later<JsonValue> {
         let inner = Arc::clone(&self.inner);
-        run_circulation_core(async move {
+        run_on_core(async move {
             let reading = inner
                 .set_remote_noise_mode(peer_id, session, mode)
                 .await?;
@@ -1420,13 +1380,13 @@ impl OpenRoseCirculation {
     /// Pulls audio and control for the given headset address from the holding peer to this machine.
     pub fn pull(&self, address: String) -> Later<String> {
         let inner = Arc::clone(&self.inner);
-        run_circulation_core(async move { inner.pull(address).await })
+        run_on_core(async move { inner.pull(address).await })
     }
 
     /// Returns the current system default audio output description, or null when unavailable.
     pub fn current_output(&self) -> Later<Option<String>> {
         let inner = Arc::clone(&self.inner);
-        run_circulation_core(async move { inner.current_output().await })
+        run_on_core(async move { inner.current_output().await })
     }
 
     /// Returns whether a known system sound settings program is installed on this host.
@@ -1454,19 +1414,10 @@ impl OpenRoseCirculation {
         self.inner.set_last_error(None);
     }
 
-    /// Closes the circulation node and stops discovery advertisement.
-    pub fn close(&self) -> Later<()> {
-        let inner = Arc::clone(&self.inner);
-        run_circulation_core(async move {
-            inner.close().await;
-            Ok(())
-        })
-    }
-
     /// Adds and starts a dev-mode simulated peer node holding a simulated EarFree i5 on loopback discovery.
     pub fn dev_add_simulated_peer(&self, name: Option<String>) -> Later<JsonValue> {
         let inner = Arc::clone(&self.inner);
-        run_circulation_core(async move {
+        run_on_core(async move {
             let status = inner.dev_add_simulated_peer(name).await?;
             Ok(serde_json::to_value(status).expect("dev peer status serializes"))
         })
@@ -1475,7 +1426,7 @@ impl OpenRoseCirculation {
     /// Opens a pairing window on a dev-mode simulated peer and returns its peer id, name, code, and QR payload.
     pub fn dev_open_peer_pairing(&self, peer_id: Option<String>) -> Later<JsonValue> {
         let inner = Arc::clone(&self.inner);
-        run_circulation_core(async move {
+        run_on_core(async move {
             let info = inner.dev_open_peer_pairing(peer_id).await?;
             Ok(serde_json::to_value(info).expect("dev peer pairing info serializes"))
         })
@@ -1484,7 +1435,7 @@ impl OpenRoseCirculation {
     /// Toggles a dev-mode simulated peer online or offline to exercise availability and re-read on return.
     pub fn dev_set_peer_online(&self, online: bool, peer_id: Option<String>) -> Later<()> {
         let inner = Arc::clone(&self.inner);
-        run_circulation_core(async move { inner.dev_set_peer_online(online, peer_id).await })
+        run_on_core(async move { inner.dev_set_peer_online(online, peer_id).await })
     }
 
     /// Updates a dev-mode simulated peer headset reply latency in milliseconds.
@@ -1785,7 +1736,11 @@ mod tests {
                 .dev_open_peer_pairing(Some(dev_id.clone()))
                 .await
                 .expect("open peer pairing");
-            let paired = inner.pair_qr(peer_offer.qr).await.expect("pair by qr");
+            let paired = inner
+                .node
+                .pair_qr(&peer_offer.qr)
+                .await
+                .expect("pair by qr");
             assert_eq!(paired.id.as_str(), dev_id);
             assert_eq!(paired.name, "手机 B");
 
@@ -1963,10 +1918,20 @@ mod tests {
                 .expect("clear refusal");
             circ.dev_set_peer_no_answer(true, None)
                 .expect("set no_answer");
+            let pulling = SHARED_RUNTIME.spawn({
+                let inner = Arc::clone(&inner);
+                let address = headset_id.as_str().to_string();
+                async move { inner.pull(address).await }
+            });
+            wait_until("contacting peers stage", || {
+                inner.snapshot().pull_stage == Some(PullStage::ContactingPeers)
+            })
+            .await;
             assert_eq!(
-                inner.pull(headset_id.as_str().to_string()).await,
+                pulling.await.expect("pull task"),
                 Err("Timeout".to_string())
             );
+            assert_eq!(inner.snapshot().pull_stage, None);
             assert!(local_runtime.snapshot().ready_session().is_none());
             circ.dev_set_peer_no_answer(false, None)
                 .expect("clear no_answer");

@@ -1,13 +1,11 @@
-use crate::{OpenRoseClient, run_on_core};
 use nsh_core::prelude::*;
 use nsh_core::JsonValue;
 use openrose_headset::{
-    FieldReading, HeadsetCommand, HeadsetField, HeadsetSetting, ModelProfile,
-    SettingPrerequisite, hearing_protection_threshold_db, setting_prerequisite,
+    FieldReading, HeadsetField, HeadsetSetting, ModelProfile, SettingPrerequisite,
+    hearing_protection_threshold_db, setting_prerequisite,
 };
 use serde::Serialize;
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
 const PREREQUISITE_SETTINGS: [HeadsetSetting; 2] = [
     HeadsetSetting::SpatialContent,
@@ -60,23 +58,6 @@ impl OpenRoseSettings {
             .filter_map(|setting| setting_prerequisite(&fields, setting).map(|p| (setting, p)))
             .collect();
         serde_json::to_value(blocked).expect("setting prerequisites serialize")
-    }
-
-    /// Executes a serialized HeadsetCommand against the client's ControlRuntime and resolves after headset confirmation.
-    pub fn execute_command(
-        client: Instance<OpenRoseClient>,
-        command_json: String,
-        expected_session: Option<u64>,
-    ) -> Later<()> {
-        let runtime = client.with(|client| Arc::clone(&client.runtime));
-        run_on_core(async move {
-            let command: HeadsetCommand = serde_json::from_str(&command_json)
-                .map_err(|err| format!("无效的控制命令: {err}"))?;
-            runtime
-                .set(command, expected_session)
-                .await
-                .map_err(|err| err.message)
-        })
     }
 }
 

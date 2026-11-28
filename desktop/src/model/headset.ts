@@ -1,28 +1,9 @@
 import { appInfo, cleanup, computed, signal } from "nsh";
-import { OpenRoseCatalog, OpenRoseClient, OpenRoseSettings } from "openrose-native";
+import { OpenRoseCatalog, OpenRoseClient, OpenRoseHeadsetFlow } from "openrose-native";
+import { connectionPhaseLabel, errorCategoryLabel, sortNoiseModes } from "./labels";
 
 export type BatteryLayout = "EarbudsAndCase" | "EarbudsOnly" | "SingleUnit";
 export type ProtocolFamilyId = "Zt" | "RsCommonV2" | "F8" | "RsCommon";
-const FIRMWARE_HINT_TEXT: Record<ProtocolFamilyId, string> = {
-  Zt: "三位 0–15 数字或十六进制（如 125 或 1.2.5）",
-  RsCommonV2: "三段 0–255 版本（如 2.1.3 或 125）",
-  RsCommon: "三段版本（首段 0–15，后两段 0–255，如 1.2.5 或 125）",
-  F8: "单个 0–65535 整数（如 125 或 300）",
-};
-
-export function firmwareHintText(family: ProtocolFamilyId): string {
-  return FIRMWARE_HINT_TEXT[family];
-}
-
-const INVALID_FIRMWARE_PREFIX = "invalid_firmware:";
-
-export function devErrorText(message: string): string {
-  if (!message.startsWith(INVALID_FIRMWARE_PREFIX)) return message;
-  const family = message.slice(INVALID_FIRMWARE_PREFIX.length);
-  const hint = family in FIRMWARE_HINT_TEXT ? FIRMWARE_HINT_TEXT[family as ProtocolFamilyId] : null;
-  return hint === null ? "固件版本格式不对" : `固件版本格式不对：${hint}`;
-}
-
 export type ConnectionPhase = "Connecting" | "Discovering" | "Subscribing" | "Initializing" | "Ready";
 export type SettingStage =
   | "Submitted"
@@ -149,6 +130,82 @@ export interface HeadsetCapabilities {
   spatial_contents: string[];
 }
 
+export type HostPlatform = "Unknown" | "Android" | "Windows" | "Linux" | "MacOs";
+export type PermissionState = "NotRequired" | "Required" | "Granted" | "Denied";
+export type PlatformApplicability = "Unknown" | "NotApplicable" | "Applicable";
+export type ReconnectGuidance = "OpenCaseAutoConnect" | "WaitSystemBluetooth";
+export type TransportRecoveryReason =
+  | "ServiceDiscovery"
+  | "ServicesUnavailable"
+  | "Subscription"
+  | "WriteFailed"
+  | "ServicesChanged"
+  | "NoInitialResponse";
+export type TransportSelectionReason =
+  | "ModelBleOnly"
+  | "ForcedBle"
+  | "SppUnavailable"
+  | "ClassicAddressUnavailable"
+  | "AudioProfileUnknown"
+  | "LeAudio"
+  | "ClassicAudio";
+
+export type TransportUnavailableReason =
+  | { UnsupportedPlatform: { platform: string | null } }
+  | "BleUnsupported"
+  | "PermissionRequired"
+  | "NoAdapter"
+  | "AdapterPoweredOff"
+  | "AdapterStateUnknown"
+  | "AccessDenied"
+  | "ServiceUnavailable"
+  | { MissingDependency: { detail: string | null } }
+  | "Initializing"
+  | "Recovering"
+  | "ShuttingDown"
+  | "Closed"
+  | { BackendUnavailable: { detail: string | null } };
+
+export type TransportAvailability =
+  | "Available"
+  | "Disabled"
+  | { Unavailable: { reason: TransportUnavailableReason } };
+
+export type ConnectionBlockReason =
+  | "BluetoothPermissionRequired"
+  | "BluetoothDisabled"
+  | { TransportUnavailable: { reason: TransportUnavailableReason } };
+
+export interface PlatformState {
+  permission: PermissionState;
+  transport: TransportAvailability;
+  host_platform: HostPlatform;
+  user_unlocked: boolean;
+  scan_permission: PermissionState;
+  control_transport_applicability: PlatformApplicability;
+}
+export type ScanState = "Idle" | "Scanning" | { Failed: ControlError };
+
+export interface ConnectionRecovery {
+  session_id: number;
+  reason: TransportRecoveryReason;
+}
+
+export type TransportEndpoint =
+  | { BleGatt: { service_uuid: string; write_uuid: string; notify_uuid: string } }
+  | { SppRfcomm: { address: string; service_uuid: string } };
+
+export interface TransportSelection {
+  endpoint: TransportEndpoint;
+  reason: TransportSelectionReason;
+}
+
+export interface HeadsetDiagnostics {
+  field_errors: Record<string, ControlError>;
+  raw_notifications: string[];
+  unknown_notifications: string[];
+  warnings: string[];
+}
 export interface HeadsetState {
   headset_id: string;
   session_id: number;
@@ -157,7 +214,9 @@ export interface HeadsetState {
     capabilities: HeadsetCapabilities;
     fields: Record<string, FieldReading>;
   };
+  diagnostics: HeadsetDiagnostics;
   classic_address: string | null;
+  transport_selection: TransportSelection | null;
 }
 
 export interface SettingOperation {
@@ -180,21 +239,29 @@ export type ConnectionState =
 export interface HeadsetCandidate {
   id: string;
   name: string | null;
+  rssi: number | null;
   profile: string | null;
+  manufacturer_data_hex: string;
   classic_address: string | null;
 }
 
 export interface ControlSnapshot {
   revision: number;
+  platform: PlatformState;
+  settings: { force_ble: boolean };
   connection: ConnectionState;
   bonded_headsets: HeadsetCandidate[];
+  candidates: HeadsetCandidate[];
+  scan: ScanState;
   headset: HeadsetState | null;
   last_error: ControlError | null;
   setting_operations: SettingOperation[];
   audio_headset_id: string | null;
   connection_target: HeadsetCandidate | null;
   selected_headset_id: string | null;
-  connection_block_reason: unknown | null;
+  connection_recovery: ConnectionRecovery | null;
+  connection_block_reason: ConnectionBlockReason | null;
+  reconnect_guidance: ReconnectGuidance | null;
 }
 
 export interface BatterySlotView {
@@ -211,89 +278,85 @@ export type NoiseFeedback =
   | { kind: "confirmed"; mode: string }
   | { kind: "failed"; mode: string; code: string; message: string };
 
-const NOISE_MODE_ORDER = [
-  "anc",
-  "wind",
-  "transparency",
-  "normal",
-  "auto",
-  "dynamic",
-  "deep",
-] as const;
+const PENDING_STAGES: readonly SettingStage[] = ["Submitted", "PartiallyWritten", "Written"];
+const FAILED_STAGES: readonly SettingStage[] = ["NotApplied", "TimedOut", "Disconnected", "Failed"];
 
-const NOISE_MODE_LABELS: Record<string, string> = {
-  normal: "关闭",
-  anc: "降噪",
-  transparency: "通透",
-  wind: "抗风噪",
-  auto: "自适应",
-  dynamic: "动态降噪",
-  deep: "深度降噪",
-};
+export type HeadsetCommand = Record<string, unknown>;
 
-const ERROR_CATEGORY_LABELS: Record<string, string> = {
-  PermissionRequired: "缺少蓝牙权限",
-  TransportUnavailable: "蓝牙传输不可用",
-  NotReady: "耳机尚未就绪",
-  Unsupported: "当前固件或型号不支持",
-  InvalidArgument: "参数无效",
-  NotApplied: "耳机未应用该设置",
-  Timeout: "等待耳机确认超时",
-  TimedOut: "等待耳机确认超时",
-  Disconnected: "连接已断开",
-  Failed: "操作失败",
-};
-
-const PHASE_LABELS: Record<ConnectionPhase, string> = {
-  Connecting: "正在连接…",
-  Discovering: "正在发现服务…",
-  Subscribing: "正在订阅通知…",
-  Initializing: "正在读取耳机状态…",
-  Ready: "连接已就绪",
-};
-
-export function noiseModeLabel(mode: string): string {
-  return NOISE_MODE_LABELS[mode] ?? mode;
+export function isPendingStage(stage: SettingStage): boolean {
+  return PENDING_STAGES.includes(stage);
 }
 
-export function errorCategoryLabel(code: string): string {
-  return ERROR_CATEGORY_LABELS[code] ?? code;
+export function isFailedStage(stage: SettingStage): boolean {
+  return FAILED_STAGES.includes(stage);
+}
+
+export function controlErrorOf(cause: unknown): ControlError {
+  const code = cause instanceof Error ? cause.message : String(cause);
+  return { code: code as ControlErrorCode, message: "" };
+}
+
+export function headsetDisplayName(
+  candidate: HeadsetCandidate | null,
+  catalogById: Map<string, ModelCatalogEntry>,
+  profileId: string | null = null,
+): string | null {
+  const name = candidate?.name?.trim();
+  if (name) return name;
+  const profile = profileId ?? candidate?.profile ?? null;
+  if (profile) return catalogById.get(profile)?.displayName ?? profile;
+  return candidate?.id ?? null;
+}
+
+function readKnownValue(fields: Record<string, FieldReading>, key: string): FieldValue | null {
+  const reading = fields[key];
+  if (reading && typeof reading === "object" && "Known" in reading) {
+    return reading.Known.value;
+  }
+  return null;
 }
 
 export function readKnownNumber(fields: Record<string, FieldReading>, key: string): number | null {
-  const reading = fields[key];
-  if (reading && typeof reading === "object" && "Known" in reading) {
-    const val = reading.Known.value;
-    if ("Number" in val) return val.Number;
-  }
-  return null;
+  const value = readKnownValue(fields, key);
+  return value && "Number" in value ? value.Number : null;
 }
 
 export function readKnownToggle(fields: Record<string, FieldReading>, key: string): boolean | null {
-  const reading = fields[key];
-  if (reading && typeof reading === "object" && "Known" in reading) {
-    const val = reading.Known.value;
-    if ("Toggle" in val) return val.Toggle;
-  }
-  return null;
+  const value = readKnownValue(fields, key);
+  return value && "Toggle" in value ? value.Toggle : null;
 }
 
 export function readKnownText(fields: Record<string, FieldReading>, key: string): string | null {
-  const reading = fields[key];
-  if (reading && typeof reading === "object" && "Known" in reading) {
-    const val = reading.Known.value;
-    if ("Text" in val) return val.Text;
-  }
-  return null;
+  const value = readKnownValue(fields, key);
+  return value && "Text" in value ? value.Text : null;
+}
+
+export function readKnownIntegerList(
+  fields: Record<string, FieldReading>,
+  key: string,
+): number[] | null {
+  const value = readKnownValue(fields, key);
+  return value && "IntegerList" in value ? value.IntegerList : null;
+}
+
+export function readKnownTouchKeys(
+  fields: Record<string, FieldReading>,
+  key: string,
+): TouchBinding[] | null {
+  const value = readKnownValue(fields, key);
+  return value && "TouchKeys" in value ? value.TouchKeys : null;
+}
+
+export function readKnownNoiseCycle(
+  fields: Record<string, FieldReading>,
+): Record<string, boolean | null> | null {
+  const value = readKnownValue(fields, "NoiseCycle");
+  return value && "NoiseCycle" in value ? value.NoiseCycle : null;
 }
 
 function readKnownFirmware(fields: Record<string, FieldReading>): string | null {
-  const reading = fields.Firmware;
-  if (reading && typeof reading === "object" && "Known" in reading) {
-    const val = reading.Known.value;
-    if ("Firmware" in val) return val.Firmware.display_text;
-  }
-  return null;
+  const value = readKnownValue(fields, "Firmware");
+  return value && "Firmware" in value ? value.Firmware.display_text : null;
 }
 
 function formatBatteryValue(fields: Record<string, FieldReading>, key: string): {
@@ -322,6 +385,8 @@ export interface ConnectionStatusView {
   kind: "disconnected" | "connecting" | "connected";
   label: string;
   phaseLabel: string;
+  phase: ConnectionPhase | null;
+  headsetId: string | null;
   sessionId: number | null;
   profileId: string | null;
 }
@@ -348,7 +413,8 @@ export interface HeadsetController {
   connect: (headsetId?: string | null) => Promise<void>;
   disconnect: () => Promise<void>;
   setNoiseMode: (mode: string, expectedSession?: number | null) => Promise<void>;
-  executeCommand: (commandJson: string, expectedSession: number | null) => Promise<void>;
+  executeCommand: (command: HeadsetCommand, expectedSession: number | null) => Promise<void>;
+  currentHeadset: () => HeadsetCandidate | null;
   switchSimulatedHeadset: (modelId: string, firmware: string) => Promise<boolean>;
   setSimulatedLatencyMs: (millis: number) => void;
   selectCurrentHeadset: (headsetId: string) => void;
@@ -380,33 +446,44 @@ export function createHeadsetController(): HeadsetController {
     client.dispose();
   });
 
-  const connectionStatus = computed(() => {
+  const connectionStatus = computed<ConnectionStatusView>(() => {
     const conn = snapshot().connection;
     if (conn === "Disconnected") {
       return {
-        kind: "disconnected" as const,
+        kind: "disconnected",
         label: "未连接",
         phaseLabel: "等待连接耳机",
-        sessionId: null as number | null,
-        profileId: null as string | null,
+        phase: null,
+        headsetId: null,
+        sessionId: null,
+        profileId: null,
       };
     }
     if ("Connecting" in conn) {
       return {
-        kind: "connecting" as const,
+        kind: "connecting",
         label: "连接中",
-        phaseLabel: PHASE_LABELS[conn.Connecting.phase],
+        phaseLabel: connectionPhaseLabel(conn.Connecting.phase),
+        phase: conn.Connecting.phase,
+        headsetId: conn.Connecting.headset_id,
         sessionId: conn.Connecting.session_id,
         profileId: snapshot().headset?.readings.profile ?? null,
       };
     }
     return {
-      kind: "connected" as const,
+      kind: "connected",
       label: "已连接",
       phaseLabel: "控制通道已就绪",
+      phase: "Ready",
+      headsetId: conn.Connected.headset_id,
       sessionId: conn.Connected.session_id,
       profileId: conn.Connected.profile,
     };
+  });
+
+  const currentHeadset = computed(() => {
+    snapshot();
+    return (OpenRoseHeadsetFlow.currentHeadset(client) as HeadsetCandidate | null) ?? null;
   });
 
   const currentModel = computed(() => {
@@ -477,14 +554,9 @@ export function createHeadsetController(): HeadsetController {
     return slots;
   });
 
-  const noiseModes = computed<string[]>(() => {
-    const modes = snapshot().headset?.readings.capabilities.noise_control?.modes ?? [];
-    return [...modes].sort((a, b) => {
-      const ia = NOISE_MODE_ORDER.indexOf(a as (typeof NOISE_MODE_ORDER)[number]);
-      const ib = NOISE_MODE_ORDER.indexOf(b as (typeof NOISE_MODE_ORDER)[number]);
-      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
-    });
-  });
+  const noiseModes = computed<string[]>(() =>
+    sortNoiseModes(snapshot().headset?.readings.capabilities.noise_control?.modes ?? []),
+  );
 
   const confirmedNoiseMode = computed<string | null>(() => {
     const headset = snapshot().headset;
@@ -511,22 +583,13 @@ export function createHeadsetController(): HeadsetController {
     if (latest) {
       const opMode =
         "Text" in latest.requested_value ? latest.requested_value.Text : confirmedNoiseMode() ?? "";
-      if (
-        latest.stage === "Submitted" ||
-        latest.stage === "PartiallyWritten" ||
-        latest.stage === "Written"
-      ) {
+      if (isPendingStage(latest.stage)) {
         return { kind: "in_progress", mode: opMode, stage: latest.stage };
       }
       if (pendingMode) {
         return { kind: "in_progress", mode: pendingMode, stage: "Submitted" };
       }
-      if (
-        latest.stage === "NotApplied" ||
-        latest.stage === "TimedOut" ||
-        latest.stage === "Disconnected" ||
-        latest.stage === "Failed"
-      ) {
+      if (isFailedStage(latest.stage)) {
         const code = latest.error?.code ?? latest.stage;
         const message = latest.error?.message ?? "";
         return { kind: "failed", mode: opMode, code, message };
@@ -561,13 +624,7 @@ export function createHeadsetController(): HeadsetController {
     try {
       await client.connect(headsetId);
     } catch (error) {
-      const snapErr = snapshot().last_error;
-      connectionError.set(
-        snapErr ?? {
-          code: "Failed",
-          message: error instanceof Error ? error.message : String(error),
-        },
-      );
+      connectionError.set(controlErrorOf(error));
     } finally {
       connectionBusy.set(false);
     }
@@ -593,14 +650,7 @@ export function createHeadsetController(): HeadsetController {
     try {
       await client.setNoiseMode(mode, session);
     } catch (error) {
-      const snapErr = snapshot().last_error;
-      localNoiseError.set({
-        mode,
-        error: snapErr ?? {
-          code: "Failed",
-          message: error instanceof Error ? error.message : String(error),
-        },
-      });
+      localNoiseError.set({ mode, error: controlErrorOf(error) });
     } finally {
       submittingNoiseMode.set(null);
     }
@@ -617,7 +667,7 @@ export function createHeadsetController(): HeadsetController {
       devConfig.set(updated);
       return true;
     } catch (error) {
-      devError.set(devErrorText(error instanceof Error ? error.message : String(error)));
+      devError.set(errorCategoryLabel(controlErrorOf(error).code));
       return false;
     } finally {
       devBusy.set(false);
@@ -633,7 +683,7 @@ export function createHeadsetController(): HeadsetController {
       }
       devError.set(null);
     } catch (error) {
-      devError.set(error instanceof Error ? error.message : String(error));
+      devError.set(errorCategoryLabel(controlErrorOf(error).code));
     }
   }
   function selectCurrentHeadset(headsetId: string) {
@@ -647,8 +697,8 @@ export function createHeadsetController(): HeadsetController {
     snapshot.set(client.snapshot() as ControlSnapshot);
   }
 
-  async function executeCommand(commandJson: string, expectedSession: number | null) {
-    await OpenRoseSettings.executeCommand(client, commandJson, expectedSession);
+  async function executeCommand(command: HeadsetCommand, expectedSession: number | null) {
+    await client.executeCommand(JSON.stringify(command), expectedSession);
   }
 
   return {
@@ -676,6 +726,7 @@ export function createHeadsetController(): HeadsetController {
     refreshBondedHeadsets,
     setNoiseMode,
     executeCommand,
+    currentHeadset,
     switchSimulatedHeadset,
     setSimulatedLatencyMs,
   };

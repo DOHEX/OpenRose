@@ -1,7 +1,7 @@
 import { cleanup, computed, signal } from "nsh";
 import { OpenRoseCirculation } from "openrose-native";
-import type { OpenRoseClient } from "openrose-native";
-import { errorCategoryLabel, noiseModeLabel } from "./headset";
+import { errorCategoryLabel, noiseModeLabel } from "./labels";
+import type { HeadsetController } from "./headset";
 
 export type RemoteControlStatus =
   | "Waiting"
@@ -75,6 +75,8 @@ export interface PairingOfferView {
   qrModules: string;
 }
 
+export type PullStage = "ContactingPeers" | "Acquiring" | "AcquiringOffline";
+
 export interface CirculationSnapshot {
   localPeer: LocalPeerView;
   pairedPeers: PairedPeerView[];
@@ -82,6 +84,7 @@ export interface CirculationSnapshot {
   pairingOffer: PairingOfferView | null;
   remoteReadings: Record<string, RemoteReading>;
   pendingNoiseWrites: Record<string, string>;
+  pullStage: PullStage | null;
   lastError: string | null;
 }
 
@@ -112,8 +115,11 @@ export interface RemoteHeadsetView {
   headsetName: string | null;
   batteryText: string | null;
   confirmedMode: string | null;
+  confirmedModeLabel: string;
   modes: string[];
+  modeOptions: { value: string; label: string }[];
   pendingMode: string | null;
+  pendingText: string | null;
   canSwitch: boolean;
   session: RemoteSessionReference | null;
 }
@@ -130,6 +136,7 @@ const ERROR_TEXT: Record<string, string> = {
   NotPaired: "尚未与该对端配对，或对端已取消配对",
   PeerOffline: "对端不在线",
   ServiceClosed: "耳机流转服务已关闭",
+  Disconnected: "耳机流转服务已关闭",
   OwnerInactive: "对端当前没有接入耳机",
   PairingNotOpen: "对端尚未开始配对，请先在对端点击“开始配对”",
   PairingExpired: "配对码已过期，请在对端重新开始配对",
@@ -147,10 +154,10 @@ const ERROR_TEXT: Record<string, string> = {
   IdentityError: "无法读取本机的流转身份",
   StorageError: "无法保存配对信息",
   DiscoveryError: "无法在局域网中发现对端，请检查网络",
-  "YieldRefused:InCall": "对方正在通话，暂时无法切换",
-  "YieldRefused:MicInUse": "麦克风正在使用，暂时无法切换",
+  "YieldRefused:InCall": "对方正在通话，暂时无法流转",
+  "YieldRefused:MicInUse": "麦克风正在使用，暂时无法流转",
   "YieldRefused:StillConnected": "对端让出后仍与耳机保持连接，请稍后重试",
-  "YieldRefused:AudioStateUnreadable": "对端读不到耳机的音频状态，暂时无法切换",
+  "YieldRefused:AudioStateUnreadable": "对端读不到耳机的音频状态，暂时无法流转",
   "YieldRefused:PlatformUnavailable": "对端暂时无法让出耳机",
   "AcquireFailed:InCall": "本机正在通话，无法接入耳机",
   "AcquireFailed:MicInUse": "本机麦克风正在使用，无法接入耳机",
@@ -162,6 +169,13 @@ const ERROR_TEXT: Record<string, string> = {
   PullInProgress: "正在将耳机接到这台电脑，请稍候",
 };
 
+const PULL_STAGE_TITLES: Record<PullStage | "Starting", string> = {
+  Starting: "正在将耳机接到这台电脑…",
+  ContactingPeers: "正在联系对端…",
+  Acquiring: "对端已让出耳机，正在接入本机…",
+  AcquiringOffline: "联系不上任何对端，正在直接接入本机…",
+};
+
 const CONTROL_FAILED_PREFIX = "ControlFailed:";
 
 export function circulationErrorText(code: string): string {
@@ -169,6 +183,10 @@ export function circulationErrorText(code: string): string {
     return `对端耳机控制失败：${errorCategoryLabel(code.slice(CONTROL_FAILED_PREFIX.length))}`;
   }
   return ERROR_TEXT[code] ?? `流转失败（${code}）`;
+}
+
+export function pullProgressFeedback(stage: PullStage | null): PullFeedback {
+  return { kind: "in_progress", tone: "accent", title: PULL_STAGE_TITLES[stage ?? "Starting"] };
 }
 
 export function pullOutcomeFeedback(code: string): PullFeedback {
@@ -185,7 +203,7 @@ export function pullOutcomeFeedback(code: string): PullFeedback {
         detail: "联系不上任何对端",
       };
     default:
-      return { kind: "success", tone: "success", title: "已接到这台电脑" };
+      return { kind: "error", tone: "danger", title: circulationErrorText(code) };
   }
 }
 
@@ -208,6 +226,7 @@ export function remoteHeadsetView(
   const reading = peer.reading;
   const pendingMode = pendingNoiseWrites[peer.id] ?? null;
   const modes = reading.noise_modes.map((mode) => mode.toLowerCase());
+  const confirmedMode = reading.noise_mode?.toLowerCase() ?? null;
   const holds = peer.available && reading.headset_name !== null;
   return {
     peerId: peer.id,
@@ -217,9 +236,12 @@ export function remoteHeadsetView(
     headsetId: reading.headset_id,
     headsetName: reading.headset_name,
     batteryText: remoteBatteryText(reading.battery),
-    confirmedMode: reading.noise_mode?.toLowerCase() ?? null,
+    confirmedMode,
+    confirmedModeLabel: confirmedMode ? `当前：${noiseModeLabel(confirmedMode)}` : "降噪模式",
     modes,
+    modeOptions: modes.map((mode) => ({ value: mode, label: noiseModeLabel(mode) })),
     pendingMode,
+    pendingText: pendingMode ? `等待对端确认切换至${noiseModeLabel(pendingMode)}…` : null,
     canSwitch: holds && reading.session !== null && modes.length > 0 && pendingMode === null,
     session: reading.session,
   };
@@ -230,10 +252,6 @@ export function firstRemoteHolder(snapshot: CirculationSnapshot): RemoteHeadsetV
     (peer) => peer.available && peer.reading.headset_name !== null,
   );
   return holder ? remoteHeadsetView(holder, snapshot.pendingNoiseWrites) : null;
-}
-
-export function remoteNoiseFeedbackText(view: RemoteHeadsetView): string | null {
-  return view.pendingMode ? `等待对端确认切换至${noiseModeLabel(view.pendingMode)}…` : null;
 }
 
 export interface CirculationController {
@@ -248,7 +266,7 @@ export interface CirculationController {
   devPairing: () => DevPeerPairingInfo | null;
   pullingAddress: () => string | null;
   pullFeedback: () => PullFeedback | null;
-  lastRemoteAddress: () => string | null;
+  offlinePullAddress: () => string | null;
   currentOutput: () => string | null;
   soundSettingsAvailable: () => boolean;
   selectNearbyPeer: (peerId: string | null) => void;
@@ -273,16 +291,18 @@ export interface CirculationController {
   devSetSoundSettingsAvailable: (available: boolean) => void;
 }
 
+const AUDIO_REFRESH_MS = 3000;
+
 function findRemoteAddress(snap: CirculationSnapshot): string | null {
   const holder = snap.pairedPeers.find((peer) => peer.available && peer.reading.headset_id !== null);
   return holder?.reading.headset_id ?? null;
 }
 
 export function createCirculationController(
-  client: OpenRoseClient,
+  headset: HeadsetController,
   development: boolean,
 ): CirculationController {
-  const circulation = new OpenRoseCirculation(client);
+  const circulation = new OpenRoseCirculation(headset.client);
   const initialSnapshot = circulation.snapshot() as CirculationSnapshot;
   const snapshot = signal<CirculationSnapshot>(initialSnapshot);
   const busy = signal(false);
@@ -292,7 +312,7 @@ export function createCirculationController(
   const devPeer = signal<DevPeerStatus | null>(null);
   const devPairing = signal<DevPeerPairingInfo | null>(null);
   const pullingAddress = signal<string | null>(null);
-  const pullFeedback = signal<PullFeedback | null>(null);
+  const pullResult = signal<PullFeedback | null>(null);
   const lastRemoteAddress = signal<string | null>(findRemoteAddress(initialSnapshot));
   const currentOutput = signal<string | null>(null);
   const soundSettingsAvailable = signal<boolean>(circulation.soundSettingsAvailable());
@@ -320,6 +340,19 @@ export function createCirculationController(
   const remoteHeadsets = computed(() =>
     snapshot().pairedPeers.map((peer) => remoteHeadsetView(peer, snapshot().pendingNoiseWrites)),
   );
+
+  const pullFeedback = computed<PullFeedback | null>(
+    () =>
+      pullResult() ??
+      (pullingAddress() === null ? null : pullProgressFeedback(snapshot().pullStage)),
+  );
+
+  const offlinePullAddress = computed(() => {
+    if (headset.connectionStatus().kind === "connected") return null;
+    if (remoteHeadsets().some((view) => view.holds)) return null;
+    if (snapshot().pairedPeers.length === 0) return null;
+    return lastRemoteAddress() ?? headset.currentHeadset()?.id ?? null;
+  });
 
   async function run(action: () => Promise<unknown>) {
     actionError.set(null);
@@ -349,6 +382,8 @@ export function createCirculationController(
   }
 
   void refreshAudioState();
+  const audioRefreshTimer = setInterval(() => void refreshAudioState(), AUDIO_REFRESH_MS);
+  cleanup(() => clearInterval(audioRefreshTimer));
 
   function refreshDevPeer() {
     devPeer.set((circulation.devPeerStatus() as DevPeerStatus | null) ?? null);
@@ -366,7 +401,7 @@ export function createCirculationController(
     devPairing: () => devPairing(),
     pullingAddress: () => pullingAddress(),
     pullFeedback: () => pullFeedback(),
-    lastRemoteAddress: () => lastRemoteAddress(),
+    offlinePullAddress: () => offlinePullAddress(),
     currentOutput: () => currentOutput(),
     soundSettingsAvailable: () => soundSettingsAvailable(),
     selectNearbyPeer: (peerId) => selectedPeerId.set(peerId),
@@ -390,7 +425,7 @@ export function createCirculationController(
       }),
     pull: async (address) => {
       if (pullingAddress() !== null) {
-        pullFeedback.set({
+        pullResult.set({
           kind: "error",
           tone: "warning",
           title: circulationErrorText("PullInProgress"),
@@ -398,21 +433,17 @@ export function createCirculationController(
         return;
       }
       pullingAddress.set(address);
-      pullFeedback.set({
-        kind: "in_progress",
-        tone: "accent",
-        title: "正在将耳机接到这台电脑…",
-      });
+      pullResult.set(null);
       try {
         const outcome = await circulation.pull(address);
         if (!disposed) {
-          pullFeedback.set(pullOutcomeFeedback(outcome));
+          pullResult.set(pullOutcomeFeedback(outcome));
           void refreshAudioState();
         }
       } catch (cause) {
         if (!disposed) {
           const code = cause instanceof Error ? cause.message : String(cause);
-          pullFeedback.set({
+          pullResult.set({
             kind: "error",
             tone: "danger",
             title: circulationErrorText(code),
@@ -424,7 +455,7 @@ export function createCirculationController(
         }
       }
     },
-    clearPullFeedback: () => pullFeedback.set(null),
+    clearPullFeedback: () => pullResult.set(null),
     refreshAudioState,
     openSoundSettings: () => {
       actionError.set(null);

@@ -3,6 +3,7 @@ import {
   Card,
   Column,
   Divider,
+  ListItem,
   MetricGrid,
   MutedText,
   NoticeBanner,
@@ -11,14 +12,7 @@ import {
   SegmentedTabs,
   StatusBadge,
 } from "../ui";
-import type { MetricItem, SegmentOption, ToneVariant } from "../ui";
-
-export interface BondedHeadsetItemView {
-  id: string;
-  displayName: string;
-  configCaption: string | null;
-  isCurrent: boolean;
-}
+import type { BondedHeadsetItemView, MetricItem, SegmentOption, ToneVariant } from "../ui";
 
 export interface MainPageProps {
   hasCurrentHeadset: boolean;
@@ -33,7 +27,7 @@ export interface MainPageProps {
   blockReason: { title: string; detail: string | null } | null;
   connectionErrorTitle: string | null;
   connectionErrorDetail: string | null;
-  familyLabel: string;
+  modelConfigLabel: string;
   batteryItems: MetricItem[];
   noiseOptions: SegmentOption[];
   confirmedNoiseLabel: string | null;
@@ -180,7 +174,7 @@ export function MainPage(props: MainPageProps) {
             <Column class="gap-2">
               <Row class="items-center justify-between">
                 <SectionTitle>电量状态</SectionTitle>
-                <MutedText>{props.familyLabel}</MutedText>
+                <MutedText>{props.modelConfigLabel}</MutedText>
               </Row>
               {props.batteryItems.length > 0 ? (
                 <MetricGrid items={props.batteryItems} />
@@ -274,9 +268,10 @@ export function MainPage(props: MainPageProps) {
                   key={(item: BondedHeadsetItemView) => item.id}
                 >
                   {(item, index) => (
-                    <Row
+                    <ListItem
                       testID={`bonded-headset-row-${index()}`}
-                      class="items-center justify-between gap-3 rounded-(--radius) border border-border bg-muted/40 px-3 py-2"
+                      direction="row"
+                      class="items-center justify-between gap-3 px-3 py-2"
                     >
                       <Column class="flex-1 gap-0.5">
                         <SectionTitle>{item().displayName}</SectionTitle>
@@ -299,7 +294,7 @@ export function MainPage(props: MainPageProps) {
                           onPress={() => props.onSelectCurrentHeadset(item().id)}
                         />
                       )}
-                    </Row>
+                    </ListItem>
                   )}
                 </Each>
               </Column>

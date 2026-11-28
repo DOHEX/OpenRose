@@ -1,9 +1,6 @@
 use super::{ControlConfig, ControlRuntime, ObserverHub, OpenRoseClient, SHARED_RUNTIME, SystemClock};
-use nsh_core::prelude::*;
 use openrose_circulation::LocalAudio;
-use openrose_desktop_platform::bluetooth::{
-    DesktopBluetooth, bluetooth_settings_command, create_desktop_bluetooth, open_bluetooth_settings,
-};
+use openrose_desktop_platform::bluetooth::{DesktopBluetooth, create_desktop_bluetooth};
 use std::sync::Arc;
 use tokio::task::JoinHandle;
 
@@ -54,23 +51,6 @@ impl OpenRoseClient {
     }
 }
 
-/// System Bluetooth settings of the desktop host; the app never switches the adapter itself.
-#[module]
-pub struct OpenRoseBluetooth;
-
-#[module]
-impl OpenRoseBluetooth {
-    /// Whether a known system Bluetooth settings program is installed on this host.
-    pub fn settings_available() -> bool {
-        bluetooth_settings_command().is_some()
-    }
-
-    /// Opens the system Bluetooth settings program, failing when none is installed.
-    pub fn open_settings() -> Result<(), JsError> {
-        open_bluetooth_settings().map_err(|error| JsError::Error(error.code().to_string()))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -91,13 +71,5 @@ mod tests {
         let client = OpenRoseClient::new(true);
         assert!(client.dev.is_some());
         assert!(client.desktop.is_none());
-    }
-
-    #[test]
-    fn the_settings_entry_exists_only_with_a_known_settings_program() {
-        assert_eq!(
-            OpenRoseBluetooth::settings_available(),
-            bluetooth_settings_command().is_some()
-        );
     }
 }

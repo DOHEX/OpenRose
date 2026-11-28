@@ -1,26 +1,23 @@
-import type { LoginLaunchStatus, LoginLaunchStore } from "../../model/loginLaunch";
-import {
-  TRAY_PANEL_CONTROL_META,
-  isDefaultTrayPanelSettings,
-  normalizeTrayPanelSettings,
-  trayPanelSettingsSummary,
-} from "../../model/trayPanelSettings";
 import type {
   DesktopSettingsStore,
+  LoginLaunchStatus,
+  LoginLaunchStore,
   TrayAvailability,
   TrayPanelControl,
-} from "../../model/trayPanelSettings";
+} from "../../ui";
 import {
   ActionButton,
   BodyText,
   Card,
   Column,
   Divider,
+  ListItem,
   MutedText,
   NoticeBanner,
   Row,
   SectionTitle,
   StatusBadge,
+  SwitchRow,
   ToggleSwitch,
 } from "../../ui";
 
@@ -33,7 +30,7 @@ export interface TraySettingsPageProps {
 }
 
 export function TraySettingsPage(props: TraySettingsPageProps) {
-  const panel = () => normalizeTrayPanelSettings(props.settings.trayPanel());
+  const panel = () => props.settings.trayPanel();
   props.loginLaunch.refresh();
   const loginLaunchStatus = () => props.loginLaunch.status();
   const loginLaunchSummary = (status: LoginLaunchStatus) =>
@@ -55,41 +52,32 @@ export function TraySettingsPage(props: TraySettingsPageProps) {
             label={props.availability.status === "available" ? "托盘可用" : "托盘不可用"}
           />
         </Row>
-        <Row class="items-center justify-between gap-3">
-          <Column class="flex-1 gap-0.5">
-            <BodyText class="font-medium">后台控制</BodyText>
-            <MutedText testID="background-control-summary">
-              关闭窗口后保留在托盘，耳机控制不中断；从托盘退出才结束控制连接
-            </MutedText>
-          </Column>
-          <ToggleSwitch
-            testID="toggle-background-control"
-            checked={props.settings.backgroundControl()}
-            accessibilityLabel="后台控制"
-            onChange={props.settings.setBackgroundControl}
-          />
-        </Row>
+        <SwitchRow
+          plain
+          testID="toggle-background-control"
+          summaryTestID="background-control-summary"
+          label="后台控制"
+          summary="关闭窗口后保留在托盘，耳机控制不中断；从托盘退出才结束控制连接"
+          checked={props.settings.backgroundControl()}
+          onChange={props.settings.setBackgroundControl}
+        />
         {loginLaunchStatus().kind !== "hidden" ? (
           <>
             <Divider />
-            <Row testID="login-launch-row" class="items-center justify-between gap-3">
-              <Column class="flex-1 gap-0.5">
-                <BodyText class="font-medium">登录时启动</BodyText>
-                <MutedText testID="login-launch-summary">
-                  {loginLaunchSummary(loginLaunchStatus())}
-                </MutedText>
-              </Column>
-              <ToggleSwitch
-                testID="toggle-launch-at-login"
-                checked={(() => {
-                  const current = loginLaunchStatus();
-                  return current.kind === "ready" && current.enabled;
-                })()}
-                disabled={loginLaunchStatus().kind !== "ready" || props.loginLaunch.busy()}
-                accessibilityLabel="登录时启动"
-                onChange={(enabled) => void props.loginLaunch.setEnabled(enabled)}
-              />
-            </Row>
+            <SwitchRow
+              plain
+              rowTestID="login-launch-row"
+              testID="toggle-launch-at-login"
+              summaryTestID="login-launch-summary"
+              label="登录时启动"
+              summary={loginLaunchSummary(loginLaunchStatus())}
+              checked={(() => {
+                const current = loginLaunchStatus();
+                return current.kind === "ready" && current.enabled;
+              })()}
+              disabled={loginLaunchStatus().kind !== "ready" || props.loginLaunch.busy()}
+              onChange={(enabled) => void props.loginLaunch.setEnabled(enabled)}
+            />
           </>
         ) : null}
         {loginLaunchError() ? (
@@ -113,7 +101,7 @@ export function TraySettingsPage(props: TraySettingsPageProps) {
           <Column class="flex-1 gap-0.5">
             <SectionTitle>托盘面板控制项</SectionTitle>
             <MutedText testID="tray-settings-summary">
-              {trayPanelSettingsSummary(panel())}
+              {props.settings.trayPanelSummary()}
             </MutedText>
           </Column>
           <ActionButton
@@ -124,18 +112,16 @@ export function TraySettingsPage(props: TraySettingsPageProps) {
           />
         </Row>
         <Divider />
-        <Row testID="tray-setting-row-noise_level" class="items-center justify-between gap-3 py-1">
-          <Column class="flex-1 gap-0.5">
-            <BodyText class="font-medium">降噪／通透档位</BodyText>
-            <MutedText>固定紧跟降噪模式下方，按当前模式条件显示</MutedText>
-          </Column>
-          <ToggleSwitch
-            testID="tray-setting-toggle-noise_level"
-            checked={panel().showNoiseLevels}
-            accessibilityLabel="降噪／通透档位"
-            onChange={props.settings.setShowNoiseLevels}
-          />
-        </Row>
+        <SwitchRow
+          plain
+          rowTestID="tray-setting-row-noise_level"
+          testID="tray-setting-toggle-noise_level"
+          class="py-1"
+          label="降噪／通透档位"
+          summary="固定紧跟降噪模式下方，按当前模式条件显示"
+          checked={panel().showNoiseLevels}
+          onChange={props.settings.setShowNoiseLevels}
+        />
         <Divider />
         <Row class="items-center justify-between gap-2">
           <Column class="gap-0.5">
@@ -146,20 +132,21 @@ export function TraySettingsPage(props: TraySettingsPageProps) {
             testID="tray-setting-reset"
             label="恢复默认"
             variant="ghost"
-            disabled={isDefaultTrayPanelSettings(panel())}
+            disabled={props.settings.trayPanelIsDefault()}
             onPress={props.settings.resetTrayPanel}
           />
         </Row>
         <Column class="gap-2">
           <Each of={panel().controlOrder} key={(id: TrayPanelControl) => id}>
             {(id, index) => (
-              <Row
+              <ListItem
                 testID={`tray-setting-row-${id()}`}
-                class="items-center justify-between gap-2 rounded-(--radius) border border-border bg-muted/40 px-3 py-2.5"
+                direction="row"
+                class="items-center justify-between gap-2 px-3 py-2.5"
               >
                 <Column class="flex-1 gap-0.5">
-                  <BodyText class="font-medium">{TRAY_PANEL_CONTROL_META[id()].label}</BodyText>
-                  <MutedText>{TRAY_PANEL_CONTROL_META[id()].summary}</MutedText>
+                  <BodyText class="font-medium">{props.settings.controlMeta(id()).label}</BodyText>
+                  <MutedText>{props.settings.controlMeta(id()).summary}</MutedText>
                 </Column>
                 <Row class="items-center gap-1.5">
                   <ActionButton
@@ -167,7 +154,7 @@ export function TraySettingsPage(props: TraySettingsPageProps) {
                     label="上移"
                     variant="secondary"
                     disabled={index() === 0}
-                    accessibilityLabel={`上移 ${TRAY_PANEL_CONTROL_META[id()].label}`}
+                    accessibilityLabel={`上移 ${props.settings.controlMeta(id()).label}`}
                     onPress={() => props.settings.moveControl(id(), -1)}
                     class="px-2 py-1"
                   />
@@ -176,18 +163,18 @@ export function TraySettingsPage(props: TraySettingsPageProps) {
                     label="下移"
                     variant="secondary"
                     disabled={index() === panel().controlOrder.length - 1}
-                    accessibilityLabel={`下移 ${TRAY_PANEL_CONTROL_META[id()].label}`}
+                    accessibilityLabel={`下移 ${props.settings.controlMeta(id()).label}`}
                     onPress={() => props.settings.moveControl(id(), 1)}
                     class="px-2 py-1"
                   />
                   <ToggleSwitch
                     testID={`tray-setting-toggle-${id()}`}
                     checked={panel().enabledControls.includes(id())}
-                    accessibilityLabel={TRAY_PANEL_CONTROL_META[id()].label}
+                    accessibilityLabel={props.settings.controlMeta(id()).label}
                     onChange={(enabled) => props.settings.setControlEnabled(id(), enabled)}
                   />
                 </Row>
-              </Row>
+              </ListItem>
             )}
           </Each>
         </Column>

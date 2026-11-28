@@ -1,46 +1,18 @@
 import { colorScheme, effect, mount, signal } from "nsh";
 import { Window } from "nsh/desktop";
 import {
-  candidateDisplayName,
-  connectionBlockMessage,
-  connectionPhaseLabel,
-  controlTransportSummary,
   createAddHeadsetModel,
-  currentHeadsetOf,
-  fieldDisplayLabel,
-  fieldRawHex,
-  fieldReadingDisplay,
+  createDesktopViews,
   firstConnectionHint,
-  fullSnapshotOf,
-  modelConfigurationCaption,
-  modelConfigurationLabel,
-  operationRequestedText,
-  platformStateSummaryRows,
-  reconnectGuidanceText,
-  recoveryReasonLabel,
   scanBlockMessage,
-  settingDisplayLabel,
-  settingStageLabel,
 } from "./src/model/desktopPages";
 import { createHeadsetSettingsModel } from "./src/model/settings";
-import type {
-  AddHeadsetCandidateView,
-  UnsupportedCandidateView,
-} from "./src/pages/AddHeadsetPage";
 import { AddHeadsetPage } from "./src/pages/AddHeadsetPage";
 import { HeadsetSettingsPage } from "./src/pages/settings/headset";
-import type {
-  DiagnosticsOperationItem,
-  DiagnosticsReadingItem,
-} from "./src/pages/DiagnosticsPage";
 import { DiagnosticsPage } from "./src/pages/DiagnosticsPage";
 import { HeadsetInfoPage } from "./src/pages/HeadsetInfoPage";
-import {
-  createHeadsetController,
-  errorCategoryLabel,
-  firmwareHintText,
-  noiseModeLabel,
-} from "./src/model/headset";
+import { createHeadsetController } from "./src/model/headset";
+import { firmwareHintText } from "./src/model/labels";
 import type { HeadsetController } from "./src/model/headset";
 import { createDesktopSettingsStore, createTrayAvailabilityStore } from "./src/model/trayPanelSettings";
 import type { DesktopSettingsStore, TrayAvailabilityStore } from "./src/model/trayPanelSettings";
@@ -58,7 +30,6 @@ import { DevScenariosPage } from "./src/pages/DevScenariosPage";
 import { createDevScenarioModel } from "./src/model/devScenarios";
 import type { BondedScenario, PlatformScenario } from "./src/model/devScenarios";
 import { MainPage } from "./src/pages/MainPage";
-import type { BondedHeadsetItemView } from "./src/pages/MainPage";
 import {
   Column,
   MutedText,
@@ -167,8 +138,7 @@ function DesktopApp(props: {
   const firmwareInput = signal<string>(initialConfig?.firmware ?? "125");
   const latencyValue = signal<string>(String(initialConfig?.replyLatencyMs ?? 160));
 
-  const fullSnapshot = () => fullSnapshotOf(controller);
-  const currentHeadset = () => currentHeadsetOf(controller);
+  const views = createDesktopViews(controller, addModel);
 
   const modelOptions: SelectFieldOption[] = controller.catalog.map((model) => ({
     value: model.id,
@@ -178,116 +148,6 @@ function DesktopApp(props: {
 
   const selectedEntry = () => controller.catalogById.get(selectedModelId()) ?? null;
 
-  const activeProfileId = () =>
-    controller.connectionStatus().profileId ??
-    currentHeadset()?.profile ??
-    controller.devConfig()?.modelId ??
-    null;
-
-  const headsetTitle = () => {
-    const snap = fullSnapshot();
-    const current = currentHeadset();
-    if (snap.connection !== "Disconnected" || current) {
-      const profileId = activeProfileId();
-      if (profileId) {
-        const entry = controller.catalogById.get(profileId);
-        if (entry) {
-          return entry.versionName ? `${entry.displayName} · ${entry.versionName}` : entry.displayName;
-        }
-      }
-      if (current) {
-        return candidateDisplayName(current, controller.catalogById);
-      }
-    }
-    return "ROSE 耳机";
-  };
-
-  const modelConfigCaption = () => {
-    const profileId = activeProfileId();
-    return modelConfigurationCaption(profileId, controller.catalogById);
-  };
-
-  const connectionSubtitle = () => {
-    const status = controller.connectionStatus();
-    if (status.kind === "disconnected") {
-      const snap = fullSnapshot();
-      const failed = Boolean(controller.connectionError() || snap.last_error);
-      return reconnectGuidanceText(snap.reconnect_guidance, failed);
-    }
-    const fw = controller.firmwareText();
-    return fw ? `${status.phaseLabel} · 固件 ${fw}` : status.phaseLabel;
-  };
-
-  const blockReason = () => {
-    const snap = fullSnapshot();
-    return connectionBlockMessage(snap.connection_block_reason, snap.platform.host_platform);
-  };
-
-  const bondedHeadsetViews = (): BondedHeadsetItemView[] => {
-    const snap = fullSnapshot();
-    const current = currentHeadset();
-    return snap.bonded_headsets.map((candidate) => ({
-      id: candidate.id,
-      displayName: candidateDisplayName(candidate, controller.catalogById),
-      configCaption: modelConfigurationCaption(candidate.profile, controller.catalogById),
-      isCurrent: current?.id === candidate.id,
-    }));
-  };
-
-  const batteryItems = (): MetricItem[] =>
-    controller.batterySlots().map((slot) => ({
-      id: slot.id,
-      testID: `battery-${slot.id}`,
-      label: slot.label,
-      valueText: slot.valueText,
-      caption: slot.caption,
-      low: slot.low,
-    }));
-
-  const noiseOptions = (): SegmentOption[] =>
-    controller.noiseModes().map((mode) => ({
-      value: mode,
-      label: noiseModeLabel(mode),
-      testID: `noise-mode-${mode}`,
-    }));
-
-  const noiseStatus = (): { tone: ToneVariant; title: string; detail?: string | null } | null => {
-    const feedback = controller.noiseFeedback();
-    if (feedback.kind === "in_progress") {
-      return {
-        tone: "warning",
-        title: `正在切换至${noiseModeLabel(feedback.mode)}…`,
-        detail: `阶段：${feedback.stage}`,
-      };
-    }
-    if (feedback.kind === "confirmed") {
-      return {
-        tone: "success",
-        title: `已确认：${noiseModeLabel(feedback.mode)}`,
-      };
-    }
-    if (feedback.kind === "failed") {
-      return {
-        tone: "danger",
-        title: `切换失败：${errorCategoryLabel(feedback.code)} (${feedback.code})`,
-        detail: feedback.message || null,
-      };
-    }
-    return null;
-  };
-
-  const activeNoiseValue = () => {
-    const feedback = controller.noiseFeedback();
-    if (feedback.kind === "in_progress") return feedback.mode;
-    return controller.confirmedNoiseMode();
-  };
-
-  const confirmedNoiseLabel = () => {
-    const mode = controller.confirmedNoiseMode();
-    return mode ? noiseModeLabel(mode) : null;
-  };
-
-  const connErr = () => controller.connectionError();
   const activeDevConfig = () => controller.devConfig();
 
   const handleModelChange = (value: string | null) => {
@@ -313,220 +173,7 @@ function DesktopApp(props: {
   };
 
   const connectCurrent = () => {
-    const current = currentHeadset();
-    void controller.connect(current?.id ?? null);
-  };
-
-  const addSupportedViews = (): AddHeadsetCandidateView[] => {
-    const snap = fullSnapshot();
-    const err = addModel.addError();
-    const selected = addModel.selectedId();
-    return snap.candidates
-      .filter((c) => c.profile !== null)
-      .map((candidate) => {
-        const conn = snap.connection;
-        const isConnectingThis =
-          typeof conn === "object" &&
-          "Connecting" in conn &&
-          conn.Connecting.headset_id === candidate.id;
-        const isConnectedThis =
-          typeof conn === "object" &&
-          "Connected" in conn &&
-          conn.Connected.headset_id === candidate.id;
-        return {
-          id: candidate.id,
-          displayName: candidateDisplayName(candidate, controller.catalogById),
-          configCaption: modelConfigurationCaption(candidate.profile, controller.catalogById),
-          rssiText: candidate.rssi !== null ? `${candidate.rssi} dBm` : null,
-          connectingPhaseLabel:
-            typeof conn === "object" && "Connecting" in conn && isConnectingThis
-              ? connectionPhaseLabel(conn.Connecting.phase)
-              : addModel.addBusy() && selected === candidate.id
-                ? "正在建立控制连接…"
-                : null,
-          isControlConnected: isConnectedThis,
-          errorMessage: err && err.id === candidate.id ? err.message : null,
-        };
-      });
-  };
-
-  const addUnsupportedViews = (): UnsupportedCandidateView[] =>
-    fullSnapshot()
-      .candidates.filter((c) => c.profile === null)
-      .map((candidate) => ({
-        id: candidate.id,
-        name: candidate.name?.trim() || "未命名蓝牙设备",
-        rssiText: candidate.rssi !== null ? `${candidate.rssi} dBm` : null,
-      }));
-
-  const addScanErrorText = () => {
-    const snap = fullSnapshot();
-    if (typeof snap.scan === "object" && "Failed" in snap.scan) {
-      return `${errorCategoryLabel(snap.scan.Failed.code)}：${snap.scan.Failed.message}`;
-    }
-    const err = addModel.addError();
-    if (err && err.id === "__scan__") return err.message;
-    return null;
-  };
-
-  const addedControlSuccess = () => {
-    const addedId = addModel.addedControlId();
-    if (!addedId) return false;
-    const conn = fullSnapshot().connection;
-    return (
-      typeof conn === "object" &&
-      "Connected" in conn &&
-      conn.Connected.headset_id === addedId
-    );
-  };
-
-  const infoView = () => {
-    const snap = fullSnapshot();
-    const headset = snap.headset;
-    const current = currentHeadset();
-    const conn = snap.connection;
-    const profileId =
-      headset?.readings.profile ??
-      (typeof conn === "object" && "Connected" in conn
-        ? conn.Connected.profile
-        : current?.profile) ??
-      null;
-    const entry = profileId ? controller.catalogById.get(profileId) ?? null : null;
-    const isConnected = typeof conn === "object" && "Connected" in conn;
-    const isConnecting = typeof conn === "object" && "Connecting" in conn;
-    const transport = controlTransportSummary(
-      headset?.transport_selection,
-      isConnected || isConnecting,
-    );
-    const initializing =
-      typeof conn === "object" &&
-      "Connecting" in conn &&
-      conn.Connecting.phase === "Initializing";
-    const fwReading = headset?.readings.fields.Firmware;
-    const fwError = headset?.diagnostics.field_errors.Firmware;
-    const fwText = headset
-      ? fieldReadingDisplay("Firmware", fwReading, initializing, fwError)
-      : "未连接";
-    return {
-      hasHeadset: Boolean(headset || current),
-      isConnected,
-      isConnecting,
-      modelConfigLabel: modelConfigurationLabel(profileId, controller.catalogById),
-      protocolFamilyLabel: entry?.familyLabel ?? "未识别协议",
-      firmwareText: fwText,
-      controlTransportLabel: transport.transportLabel,
-      controlTransportDetail: transport.detail,
-      headsetId: headset?.headset_id ?? current?.id ?? null,
-      classicAddress: headset?.classic_address ?? current?.classic_address ?? null,
-    };
-  };
-
-  const diagnosticsView = () => {
-    const snap = fullSnapshot();
-    const headset = snap.headset;
-    const conn = snap.connection;
-    const isConnected = typeof conn === "object" && "Connected" in conn;
-    const isConnecting = typeof conn === "object" && "Connecting" in conn;
-    const currentSessionId =
-      typeof conn !== "object"
-        ? null
-        : "Connecting" in conn
-          ? conn.Connecting.session_id
-          : conn.Connected.session_id;
-    const phaseText =
-      typeof conn !== "object"
-        ? "未连接"
-        : "Connecting" in conn
-          ? connectionPhaseLabel(conn.Connecting.phase)
-          : connectionPhaseLabel("Ready");
-    const transport = controlTransportSummary(
-      headset?.transport_selection,
-      isConnected || isConnecting,
-    );
-    const recoveryText = snap.connection_recovery
-      ? `会话 #${snap.connection_recovery.session_id} · ${recoveryReasonLabel(snap.connection_recovery.reason)}`
-      : null;
-    const lastErrorText = snap.last_error
-      ? `${errorCategoryLabel(snap.last_error.code)} (${snap.last_error.code})：${snap.last_error.message}`
-      : null;
-    const operations: DiagnosticsOperationItem[] = [...snap.setting_operations]
-      .reverse()
-      .map((op) => {
-        const tone: ToneVariant =
-          op.stage === "Confirmed"
-            ? "success"
-            : op.stage === "Submitted" ||
-                op.stage === "PartiallyWritten" ||
-                op.stage === "Written"
-              ? "warning"
-              : "danger";
-        const detailParts = [`请求值：${operationRequestedText(op)}`];
-        if (op.total_frames > 0) {
-          detailParts.push(`发送进度：${op.written_frames}/${op.total_frames}`);
-        }
-        if (op.confirmed_fields.length > 0) {
-          detailParts.push(
-            `已确认：${op.confirmed_fields.map(fieldDisplayLabel).join("、")}`,
-          );
-        }
-        if (op.error) {
-          detailParts.push(op.error.message);
-        }
-        if (currentSessionId !== null && op.session_id !== currentSessionId) {
-          detailParts.push(`历史会话 #${op.session_id}`);
-        }
-        return {
-          id: op.id,
-          title: `${settingDisplayLabel(op.setting)} · #${op.id}`,
-          stageLabel: settingStageLabel(op.stage),
-          detail: detailParts.join(" · "),
-          tone,
-        };
-      });
-    const initializing =
-      typeof conn === "object" &&
-      "Connecting" in conn &&
-      conn.Connecting.phase === "Initializing";
-    const readings: DiagnosticsReadingItem[] = headset
-      ? [...headset.readings.capabilities.readable_fields]
-          .sort()
-          .map((field) => ({
-            field,
-            label: fieldDisplayLabel(field),
-            valueText: fieldReadingDisplay(
-              field,
-              headset.readings.fields[field],
-              initializing,
-              headset.diagnostics.field_errors[field],
-            ),
-            rawHex: fieldRawHex(headset.readings.fields[field]),
-          }))
-      : [];
-    const fieldErrors = headset
-      ? Object.entries(headset.diagnostics.field_errors).map(([field, err]) => ({
-          label: fieldDisplayLabel(field),
-          detail: `${errorCategoryLabel(err.code)} (${err.code}) ${err.message}`,
-        }))
-      : [];
-    return {
-      platformRows: platformStateSummaryRows(snap),
-      connectionSummary: headsetTitle(),
-      connectionPhaseText: phaseText,
-      sessionIdText: currentSessionId !== null ? `#${currentSessionId}` : "无活动会话",
-      controlTransportText: transport.transportLabel,
-      controlTransportDetail: transport.detail,
-      recoveryText,
-      lastErrorText,
-      operations,
-      readings,
-      rawSessionHeader: headset
-        ? `会话 #${headset.session_id} · ${headset.headset_id}`
-        : null,
-      fieldErrors,
-      warnings: headset?.diagnostics.warnings ?? [],
-      rawNotifications: headset?.diagnostics.raw_notifications ?? [],
-      unknownNotifications: headset?.diagnostics.unknown_notifications ?? [],
-    };
+    void controller.connect(controller.currentHeadset()?.id ?? null);
   };
 
   return (
@@ -542,7 +189,7 @@ function DesktopApp(props: {
           />
           <Column class="gap-1.5 rounded-(--radius) border border-sidebar-border bg-card p-2.5">
             <MutedText>当前耳机</MutedText>
-            <MutedText testID="sidebar-current-headset">{headsetTitle()}</MutedText>
+            <MutedText testID="sidebar-current-headset">{views.headsetTitle()}</MutedText>
             <StatusBadge
               testID="sidebar-connection-badge"
               tone={
@@ -567,32 +214,28 @@ function DesktopApp(props: {
             {activePage() === "headset" ? (
               <Column class="flex-col gap-4 sm:flex-row sm:items-start">
                 <MainPage
-                  hasCurrentHeadset={Boolean(currentHeadset())}
-                  bondedHeadsets={bondedHeadsetViews()}
-                  firstConnectionHint={firstConnectionHint(fullSnapshot().platform.host_platform)}
-                  headsetTitle={headsetTitle()}
-                  modelConfigCaption={modelConfigCaption()}
+                  hasCurrentHeadset={Boolean(controller.currentHeadset())}
+                  bondedHeadsets={views.bondedHeadsets()}
+                  firstConnectionHint={firstConnectionHint(controller.snapshot().platform.host_platform)}
+                  headsetTitle={views.headsetTitle()}
+                  modelConfigCaption={views.modelConfigCaption()}
                   connectionKind={controller.connectionStatus().kind}
                   connectionLabel={controller.connectionStatus().label}
-                  connectionSubtitle={connectionSubtitle()}
+                  connectionSubtitle={views.connectionSubtitle()}
                   connectionBusy={controller.connectionBusy()}
-                  blockReason={blockReason()}
-                  connectionErrorTitle={
-                    connErr()
-                      ? `连接失败：${errorCategoryLabel(connErr()!.code)} (${connErr()!.code})`
-                      : null
-                  }
-                  connectionErrorDetail={connErr()?.message ?? null}
-                  familyLabel={controller.currentModel()?.familyLabel ?? "未识别协议"}
-                  batteryItems={batteryItems()}
-                  noiseOptions={noiseOptions()}
-                  confirmedNoiseLabel={confirmedNoiseLabel()}
-                  activeNoiseValue={activeNoiseValue()}
+                  blockReason={views.blockReason()}
+                  connectionErrorTitle={views.connectionError()?.title ?? null}
+                  connectionErrorDetail={views.connectionError()?.detail ?? null}
+                  modelConfigLabel={views.modelConfigLabel()}
+                  batteryItems={views.batteryItems()}
+                  noiseOptions={views.noiseOptions()}
+                  confirmedNoiseLabel={views.confirmedNoiseLabel()}
+                  activeNoiseValue={views.activeNoiseValue()}
                   noiseDisabled={
                     !controller.canControlNoiseMode() ||
                     controller.noiseFeedback().kind === "in_progress"
                   }
-                  noiseStatus={noiseStatus()}
+                  noiseStatus={views.noiseStatus()}
                   onConnect={connectCurrent}
                   onDisconnect={() => void controller.disconnect()}
                   onSelectCurrentHeadset={(id) => controller.selectCurrentHeadset(id)}
@@ -636,13 +279,7 @@ function DesktopApp(props: {
                 />
               </Column>
             ) : activePage() === "circulation" ? (
-              <CirculationPage
-                controller={props.circulation}
-                localConnected={controller.connectionStatus().kind === "connected"}
-                localHeadsetAddress={
-                  fullSnapshot().connection_target?.id ?? fullSnapshot().bonded_headsets[0]?.id ?? null
-                }
-              />
+              <CirculationPage controller={props.circulation} />
             ) : activePage() === "tray" ? (
               <TraySettingsPage
                 settings={props.settings}
@@ -653,13 +290,13 @@ function DesktopApp(props: {
               />
             ) : activePage() === "add-headset" ? (
               <AddHeadsetPage
-                scanning={fullSnapshot().scan === "Scanning"}
-                scanError={addScanErrorText()}
-                blockReason={scanBlockMessage(fullSnapshot())}
+                scanning={controller.snapshot().scan === "Scanning"}
+                scanError={views.addScanError()}
+                blockReason={scanBlockMessage(controller.snapshot())}
                 busy={addModel.addBusy()}
-                addedControlSuccess={addedControlSuccess()}
-                supportedCandidates={addSupportedViews()}
-                unsupportedCandidates={addUnsupportedViews()}
+                addedControlSuccess={views.addedControlSuccess()}
+                supportedCandidates={views.addSupportedCandidates()}
+                unsupportedCandidates={views.addUnsupportedCandidates()}
                 onStartScan={() => void addModel.startScan()}
                 onStopScan={() => void addModel.stopScan()}
                 onConnectCandidate={(id) => void addModel.connectCandidate(id)}
@@ -674,14 +311,14 @@ function DesktopApp(props: {
               <HeadsetSettingsPage model={settingsModel} />
             ) : activePage() === "info" ? (
               <HeadsetInfoPage
-                {...infoView()}
+                {...views.info()}
                 onDisconnect={() => void controller.disconnect()}
                 onOpenDiagnostics={() => navigateTo("diagnostics")}
                 onOpenAddHeadset={() => navigateTo("add-headset")}
               />
             ) : (
               <DiagnosticsPage
-                {...diagnosticsView()}
+                {...views.diagnostics()}
                 rawDataOpen={rawDataOpen()}
                 onToggleRawData={() => rawDataOpen.set(!rawDataOpen())}
               />
@@ -695,7 +332,7 @@ function DesktopApp(props: {
 
 function DesktopRoot() {
   const controller = createHeadsetController();
-  const circulation = createCirculationController(controller.client, controller.devConfig() !== null);
+  const circulation = createCirculationController(controller, controller.devConfig() !== null);
   const settings = createDesktopSettingsStore();
   const tray = createTrayAvailabilityStore();
   const loginLaunch = createLoginLaunchStore();

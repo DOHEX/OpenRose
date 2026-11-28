@@ -4,29 +4,14 @@ import {
   Column,
   Divider,
   InfoRow,
+  ListItem,
   MutedText,
   NoticeBanner,
   Row,
   SectionTitle,
   StatusBadge,
 } from "../ui";
-import type { ToneVariant } from "../ui";
-
-export interface AddHeadsetCandidateView {
-  id: string;
-  displayName: string;
-  configCaption: string | null;
-  rssiText: string | null;
-  connectingPhaseLabel: string | null;
-  isControlConnected: boolean;
-  errorMessage: string | null;
-}
-
-export interface UnsupportedCandidateView {
-  id: string;
-  name: string;
-  rssiText: string | null;
-}
+import type { AddHeadsetCandidateView, ToneVariant, UnsupportedCandidateView } from "../ui";
 
 export interface AddHeadsetPageProps {
   scanning: boolean;
@@ -137,9 +122,9 @@ export function AddHeadsetPage(props: AddHeadsetPageProps) {
               key={(item: AddHeadsetCandidateView) => item.id}
             >
               {(candidate, index) => (
-                <Column
+                <ListItem
                   testID={`add-candidate-${candidate().id}`}
-                  class="gap-2 rounded-(--radius) border border-border bg-muted/40 p-3"
+                  class="gap-2 p-3"
                 >
                   <Row class="items-center justify-between gap-3">
                     <Column class="flex-1 gap-0.5">
@@ -191,7 +176,7 @@ export function AddHeadsetPage(props: AddHeadsetPageProps) {
                       detail={candidate().errorMessage}
                     />
                   ) : null}
-                </Column>
+                </ListItem>
               )}
             </Each>
           </Column>

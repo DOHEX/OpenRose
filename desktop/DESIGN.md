@@ -14,22 +14,18 @@ All motion values are centralized in [motion.ts](motion.ts). Transitions run nat
 
 | Token / Pattern | Value | Used By | Purpose | Reduced Motion |
 |---|---|---|---|---|
-| `MOTION_DURATION.press` | `120 ms` | `ActionButton` | Tactile press feedback (`active:scale-[0.98]`) | Instant; scale stays `1.0` |
-| `MOTION_DURATION.fast` | `150 ms` | `ActionButton`, `TextField`, `SelectField`, `SwitchRow`, `CheckboxRow`, `RadioGroupField` | Color/border/focus transitions (`colorTransition`, `interactiveTransition`); the switch thumb slides with `transition-transform` | `motion-reduce:transition-none` |
-| `MOTION_DURATION.normal` | `200 ms` | `Card`, `NoticeBanner`, `SelectField` popup | Entrance (`fadeInUp`) and popup fade/scale (`popupStarting` / `popupEnding`) | Lands immediately at rest |
-| `MOTION_DURATION.emphasis` | `260 ms` | `StatusBadge` / noise confirmation feedback | Brief `pulse` or `shake` attention feedback on state transition | Skipped (`reduceMotion()`) |
-| `MOTION_SPRING.snappy` | `stiffness: 520, damping: 34, mass: 1` | `SegmentedTabs` indicator | Native pill indicator travel between selected noise modes | Snaps immediately |
-| `MOTION_SPRING.gentle` | `stiffness: 360, damping: 30, mass: 1` | Surface / layout settles | Smooth settling without overshoot | Snaps immediately |
-| `MOTION_SCALE.press` | `0.98` | `ActionButton` (`active:scale-[0.98]`) | Pressed button scale feedback | Disabled under `motion-reduce:` |
-| `MOTION_SCALE.popupClosed` | `0.96` / `scale-95` | `SelectField` popup | Subtle scale-in / scale-out over `bg-popover` | Appears immediately |
+| `MOTION_DURATION.normal` | `200 ms` | `Card`, `NoticeBanner` (`createSurfaceMotion`) | Entrance (`fadeInUp`) | Lands immediately at rest |
+| `MOTION_CLASS.colorTransition` | `150 ms` | `ActionButton`, `TextField`, `SelectField`, `SegmentedTabs`, `CheckboxRow`, `RadioGroupField`, `ToggleSwitch` track, `StatusBadge`, `MetricGrid` | Color/border/focus transitions | `motion-reduce:transition-none` |
+| `MOTION_CLASS.interactiveTransition` | `150 ms` | `ActionButton` | Tactile press feedback (`active:scale-[0.98]`) | `motion-reduce:transition-none`; scale stays `1.0` |
+| `MOTION_CLASS.thumbTransition` | `150 ms` | `ToggleSwitch` thumb (used by `SwitchRow`, tray controls, background control) | Thumb travel when a switch toggles | `motion-reduce:transition-none` |
+| `MOTION_CLASS.surfaceTransition` / `popupStarting` / `popupEnding` | `200 ms`, `opacity-0 scale-95` | `SelectField` popup | Popup fade and subtle scale over `bg-popover` | `motion-reduce:transition-none` |
 | `MOTION_DISTANCE.popupOffset` | `4 pt` | `SelectField` | Gap between trigger and dropdown list | Static `4 pt` |
-| `MOTION_DISTANCE.entranceOffset` | `8 pt` | `createSurfaceMotion` | Initial surface reveal offset | `0 pt` |
-| `MOTION_CLASS.colorTransition` / `interactiveTransition` | `150 ms` (`MOTION_DURATION.fast`) | `ToggleSwitch` (tray controls, background control) | Track color and thumb travel when a switch toggles | `motion-reduce:transition-none` |
 
 ## Information Architecture
 
-The main window is a sidebar (`SidebarNav`, vertical `Tabs`: arrow keys move between pages, Tab leaves the list) plus one scrolling page. Pages: 我的耳机 (dashboard and noise control), 添加耳机, 耳机信息, 诊断与记录, and 开发模式 (only with the simulator). #154 (tray controls) and #156 (headset settings) add their pages as further `NAV_ITEMS` entries and page branches in `App.tsx`.
+The main window is a sidebar (`SidebarNav`, vertical `Tabs`: arrow keys move between pages, Tab leaves the list) plus one scrolling page. Pages: 我的耳机 (dashboard and noise control), 添加耳机, 耳机设置, 耳机信息, 耳机流转, 诊断与记录, 托盘与后台, and 开发模式 (only with the simulator).
 
-- The sidebar footer always shows the current headset, its control state and the appearance; the title bar stays free for the platform's window controls.
+- The sidebar footer always shows the current headset, its control state and the appearance badge (light/dark); the title bar stays free for the platform's window controls.
+- The main page shows the 型号配置 display name beside the battery status; the protocol family (e.g. ZT) appears only on 耳机信息 and 诊断与记录.
 - Reason categories from the control core (`connection_block_reason`, `reconnect_guidance`, `scan`, `connection_recovery`) are mapped to text only in `src/model/desktopPages.ts`; no page decides a rule.
 - Every control has a `testID` and a readable `accessibilityLabel`; dev-only scenario controls (bonded headsets, platform state, scan advertisements) live on the 开发模式 page and drive the core through `OpenRoseHeadsetFlow`.

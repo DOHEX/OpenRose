@@ -1,6 +1,5 @@
 import type { JSX } from "nsh";
-import { errorCategoryLabel } from "../../../model/headset";
-import type { SettingFeedback } from "../../../model/settings";
+import type { SettingFeedback } from "../../../ui";
 import { Column, MutedText, Row, SegmentedTabs, StatusBadge, SwitchRow } from "../../../ui";
 import type { SegmentOption } from "../../../ui";
 
@@ -26,7 +25,7 @@ export function SettingStatus(props: { feedback: SettingFeedback }) {
           <StatusBadge
             testID={`status-${props.feedback.setting}`}
             tone="danger"
-            label={`${props.feedback.label}失败：${errorCategoryLabel(props.feedback.code)}`}
+            label={`${props.feedback.label}失败：${props.feedback.reason}`}
           />
           {props.feedback.message ? <MutedText>{props.feedback.message}</MutedText> : null}
         </Column>

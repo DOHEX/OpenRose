@@ -56,7 +56,19 @@ function snapshot(options: {
   bonded?: boolean;
   noiseMode?: string;
 }): ControlSnapshot {
-  const bonded = options.bonded === false ? [] : [{ id: "sim:1", name: null, profile: "I5_ZT", classic_address: null }];
+  const bonded =
+    options.bonded === false
+      ? []
+      : [
+          {
+            id: "sim:1",
+            name: null,
+            rssi: null,
+            profile: "I5_ZT",
+            manufacturer_data_hex: "",
+            classic_address: null,
+          },
+        ];
   return {
     revision: 1,
     connection: options.connected
@@ -75,6 +87,13 @@ function snapshot(options: {
             },
           },
           classic_address: null,
+          diagnostics: {
+            field_errors: {},
+            raw_notifications: [],
+            unknown_notifications: [],
+            warnings: [],
+          },
+          transport_selection: null,
         }
       : null,
     last_error: null,
@@ -83,6 +102,19 @@ function snapshot(options: {
     connection_target: null,
     selected_headset_id: null,
     connection_block_reason: null,
+    platform: {
+      permission: "NotRequired",
+      transport: "Available",
+      host_platform: "Linux",
+      user_unlocked: true,
+      scan_permission: "NotRequired",
+      control_transport_applicability: "Applicable",
+    },
+    settings: { force_ble: false },
+    candidates: [],
+    scan: "Idle",
+    connection_recovery: null,
+    reconnect_guidance: null,
   };
 }
 
@@ -119,6 +151,7 @@ function controller(
     disconnect: async () => undefined,
     setNoiseMode: async () => undefined,
     executeCommand: async () => undefined,
+    currentHeadset: () => snap.connection_target ?? snap.bonded_headsets[0] ?? null,
   };
 }
 
@@ -155,8 +188,14 @@ const REMOTE_HOLDER: RemoteHeadsetView = {
   headsetName: "EarFree i7",
   batteryText: "左 80% · 右 78% · 盒 90%",
   confirmedMode: "anc",
+  confirmedModeLabel: "当前：主动降噪",
   modes: ["anc", "normal"],
+  modeOptions: [
+    { value: "anc", label: "主动降噪" },
+    { value: "normal", label: "关闭" },
+  ],
   pendingMode: null,
+  pendingText: null,
   canSwitch: true,
   session: { peer_id: "p1", headset_id: "sim:1", token: "t" },
 };
@@ -190,7 +229,7 @@ test("tray menu lists state, battery and noise modes and binds them to the state
   ]);
   const modes = entries.filter((entry) => entry.kind === "noise_mode");
   expect(modes.map((entry) => [entry.label, entry.checked])).toEqual([
-    ["降噪", true],
+    ["主动降噪", true],
     ["通透", false],
     ["关闭", false],
   ]);
