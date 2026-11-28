@@ -20,6 +20,7 @@ import uniffi.openrose_ffi.defaultSessionTiming
 import uniffi.openrose_headset.HeadsetCommand
 import uniffi.openrose_headset.HeadsetId
 import uniffi.openrose_headset.LocalDateTime
+import java.util.concurrent.atomic.AtomicBoolean
 import java.time.LocalDateTime as JavaLocalDateTime
 
 sealed interface RustControlResult {
@@ -50,26 +51,16 @@ class RustControlRuntime(
     sessionIdBase: ULong = 0uL,
 ) : AutoCloseable {
     private val stateLock = Any()
+    private val closed = AtomicBoolean(false)
     private var pendingSnapshot: ControlSnapshot? = null
     private var mutableState: MutableStateFlow<ControlSnapshot>? = null
 
     private val observer = object : ControlObserver {
-        override fun stateChanged(snapshot: ControlSnapshot) {
-            synchronized(stateLock) {
-                val flow = mutableState
-                if (flow == null) {
-                    val existing = pendingSnapshot
-                    if (existing == null || snapshot.revision >= existing.revision) {
-                        pendingSnapshot = snapshot
-                    }
-                } else if (snapshot.revision >= flow.value.revision) {
-                    flow.value = snapshot
-                }
-            }
-        }
+        override fun stateChanged(snapshot: ControlSnapshot) = publish(snapshot)
     }
 
-    val handle = ControlRuntime(
+    @PublishedApi
+    internal val handle = ControlRuntime(
         transport = transport,
         observer = observer,
         clock = clock,
@@ -90,29 +81,55 @@ class RustControlRuntime(
         state = flow.asStateFlow()
     }
 
-    suspend fun startScan(): RustControlResult = runControl { handle.startScan() }
+    inline fun <T> command(action: (ControlRuntime) -> T): T = try {
+        action(handle)
+    } finally {
+        syncState()
+    }
+
+    suspend fun startScan(): RustControlResult = runControl { it.startScan() }
 
     suspend fun connect(headset: HeadsetId, pinned: Boolean = false): RustControlResult = runControl {
-        if (pinned) handle.connectPinned(headset) else handle.connect(headset)
+        if (pinned) it.connectPinned(headset) else it.connect(headset)
     }
 
     suspend fun connectForAddHeadset(headset: HeadsetId): RustControlResult = try {
-        runControl { handle.connectForAddHeadset(headset) }
+        runControl { it.connectForAddHeadset(headset) }
     } catch (cancelled: CancellationException) {
-        withContext(NonCancellable) { handle.cancelAddHeadset() }
+        withContext(NonCancellable) { command { it.cancelAddHeadset() } }
         throw cancelled
     }
 
     suspend fun set(command: HeadsetCommand, expectedSession: ULong? = null): RustControlResult = runControl {
-        handle.set(command, expectedSession)
+        it.set(command, expectedSession)
     }
 
     override fun close() {
+        closed.set(true)
         handle.close()
     }
 
-    private suspend inline fun runControl(action: suspend () -> Unit): RustControlResult = try {
-        action()
+    @PublishedApi
+    internal fun syncState() {
+        if (!closed.get()) publish(handle.snapshot())
+    }
+
+    private fun publish(snapshot: ControlSnapshot) {
+        synchronized(stateLock) {
+            val flow = mutableState
+            if (flow == null) {
+                val existing = pendingSnapshot
+                if (existing == null || snapshot.revision >= existing.revision) {
+                    pendingSnapshot = snapshot
+                }
+            } else if (snapshot.revision >= flow.value.revision) {
+                flow.value = snapshot
+            }
+        }
+    }
+
+    private inline fun runControl(action: (ControlRuntime) -> Unit): RustControlResult = try {
+        command(action)
         RustControlResult.Success
     } catch (failure: ControlFailure.Failed) {
         RustControlResult.Failure(failure.error)

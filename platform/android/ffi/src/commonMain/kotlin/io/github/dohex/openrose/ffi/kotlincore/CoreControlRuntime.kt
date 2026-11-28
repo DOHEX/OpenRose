@@ -67,22 +67,22 @@ class CoreControlRuntime internal constructor(
         { (transport as? AutoCloseable)?.close() },
     )
 
-    override suspend fun refreshBondedDevices() = rust.handle.refreshBondedHeadsets()
+    override suspend fun refreshBondedDevices() = rust.command { it.refreshBondedHeadsets() }
 
     override suspend fun startScan(): OperationResult = rust.startScan().toOperation()
 
-    override suspend fun stopScan() = rust.handle.stopScan()
+    override suspend fun stopScan() = rust.command { it.stopScan() }
 
-    override suspend fun selectCurrentHeadset(deviceId: DeviceId) = rust.handle.selectCurrentHeadset(deviceId.value)
+    override suspend fun selectCurrentHeadset(deviceId: DeviceId) = rust.command { it.selectCurrentHeadset(deviceId.value) }
 
     override suspend fun connect(deviceId: DeviceId, pinned: Boolean): OperationResult = rust.connect(deviceId.value, pinned).toOperation()
 
     override suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult = rust.connectForAddHeadset(deviceId.value).toOperation()
 
-    override suspend fun disconnect(): Boolean = rust.handle.disconnect()
+    override suspend fun disconnect(): Boolean = rust.command { it.disconnect() }
 
     override suspend fun release(): Boolean {
-        val released = rust.handle.release()
+        val released = rust.command { it.release() }
         if (released && linkReleased.compareAndSet(false, true)) closing.end()
         return released
     }
@@ -92,9 +92,9 @@ class CoreControlRuntime internal constructor(
         return result.toOperation()
     }
 
-    override fun updateSettings(settings: UserSettings) = rust.handle.updateSettings(settings.toRust())
+    override fun updateSettings(settings: UserSettings) = rust.command { it.updateSettings(settings.toRust()) }
 
-    override fun updatePlatformState(platformState: PlatformState) = rust.handle.updatePlatformState(platformState.toRust())
+    override fun updatePlatformState(platformState: PlatformState) = rust.command { it.updatePlatformState(platformState.toRust()) }
 }
 
 private class ClosingBarrier(private val close: () -> Unit) {
