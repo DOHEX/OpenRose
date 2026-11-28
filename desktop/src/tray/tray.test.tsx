@@ -369,5 +369,5 @@ test("tray panel shows current system output and pulls a remote headset to this 
   expect(app.shows("id:tray-remote-card")).toBe(false);
   await app.waitFor("id:tray-status-badge");
   expect(app.shows("text:已连接")).toBe(true);
-  expect(app.shows("text:当前输出：EarFree i5")).toBe(true);
+  expect(app.shows("text:当前输出：内置扬声器")).toBe(true);
 });
