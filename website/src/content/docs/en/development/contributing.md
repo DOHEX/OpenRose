@@ -5,17 +5,18 @@ description: Build OpenRose from source, plus developer docs, license, and ackno
 
 ## Building from source
 
-Requires JDK 21, the stable Rust toolchain, and the Android SDK (Platform 37, Build Tools 37.0.0; set `ANDROID_HOME` or `sdk.dir` in `local.properties`). Building the Android APK also requires the `aarch64-linux-android`, `armv7-linux-androideabi` and `x86_64-linux-android` targets and `cargo-ndk`; building the Windows desktop app also requires the Rust MSVC toolchain and Visual Studio C++ Build Tools. On Windows, replace `./gradlew` with `.\gradlew.bat`.
+Requires JDK 21, the stable Rust toolchain, [nsh](https://nsh.dev/) 0.7+, and the Android SDK (Platform 37, Build Tools 37.0.0; set `ANDROID_HOME` or `sdk.dir` in `local.properties`). Building the Android APK also requires the `aarch64-linux-android`, `armv7-linux-androideabi` and `x86_64-linux-android` targets and `cargo-ndk`; building and packaging the Linux NSH desktop app also requires `nfpm`, `appimagetool`, and the GTK 4.14+, GStreamer, and D-Bus development libraries (`libgtk-4-dev`, `libgstreamer1.0-dev`, `libgstreamer-plugins-base1.0-dev`, `libdbus-1-dev`, `pkg-config`). On Windows, replace `./gradlew` with `.\gradlew.bat`.
 
 ```bash
 git clone https://github.com/DOHEX/OpenRose.git
 cd OpenRose
 ./gradlew :androidApp:assembleDebug   # Android debug APK
-./gradlew :desktopApp:run             # run the desktop app
-cargo xtask check                     # all checks that need no earphone hardware (Rust and Gradle)
+(cd desktop && nsh run)               # run the NSH desktop app
+cargo xtask package-linux             # build Linux AppImage / deb / rpm / pacman
+cargo xtask check                     # all checks that need no earphone hardware (Rust, NSH, and Gradle)
 ```
 
-Pull requests must pass `cargo xtask check`. It runs the version check, Rust tests and clippy, the no-comments check, and Gradle `check offlineCheck` (formatting with Spotless, detekt and Android lint without baselines, and coverage verification). For the development environment, module layout, adding models, the UI sandbox, and commit conventions, see [CONTRIBUTING.md](https://github.com/DOHEX/OpenRose/blob/main/CONTRIBUTING.md) (Chinese).
+Pull requests must pass `cargo xtask check`. It runs the version check, Rust tests and clippy, the no-comments check, NSH check and tests, and Gradle `check offlineCheck` (formatting with Spotless, detekt and Android lint without baselines, and coverage verification). For the development environment, module layout, adding models, the UI sandbox, and commit conventions, see [CONTRIBUTING.md](https://github.com/DOHEX/OpenRose/blob/main/CONTRIBUTING.md) (Chinese).
 
 Run `./gradlew :tools:ui-sandbox:run` to check when settings become available. The initializing scenario represents a headset that has yet to report its readings. Ordinary settings become writable once the control connection is ready. The sandbox processes writes in submission order. On FirstAngel, an EQ request queued after a game mode change is checked against the new preset list once the headset confirms the change. To simulate reconnecting, return the console to the initializing phase. Pending results belong to the previous session.
 

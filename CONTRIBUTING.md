@@ -18,21 +18,22 @@
   rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
   cargo install --locked cargo-ndk --version 4.1.2
   ```
-- **Linux 运行库**：运行或测试桌面版需要 GTK 3、EGL / OpenGL 和 fontconfig；构建 Linux 蓝牙实现（bluer 经 libdbus 访问 BlueZ）还需要 `libdbus-1-dev` 与 `pkg-config`。CI 在 Ubuntu 24.04 上安装的是：
+- **Linux 运行库与打包工具**：运行或测试 NSH 桌面端需要 GTK 4.14+、GStreamer、D-Bus 与 GLib；编译 NSH 桌面端和 Linux 蓝牙实现（bluer 经 libdbus 访问 BlueZ）还需要开发库及 `pkg-config`。Ubuntu 24.04 上需要：
 
   ```bash
-  sudo apt-get install --yes libgtk-3-0t64 libegl1 libgl1 libfontconfig1 libdbus-1-dev pkg-config rpm libarchive-tools
+  sudo apt-get install --yes libgtk-4-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libdbus-1-dev pkg-config
   ```
 
-  其中 `rpm` 和 `libarchive-tools` 用于打包 RPM / Pacman。真实运行桌面版控制耳机还需要已运行的 BlueZ、可访问的系统 D-Bus 和已开启且支持 BLE 的适配器；DEB、RPM、Pacman 声明 `bluez` 依赖，AppImage 依赖宿主的 BlueZ。Linux 托盘需要 `libsystemd`。
-- Windows 桌面构建需要 `rust-toolchain.toml` 固定的 Rust（MSVC 工具链）和 Visual Studio C++ Build Tools。Gradle 会编译 WinRT 蓝牙组件并随 MSI 分发。
+  打包 Linux 安装包需要 [nsh](https://nsh.dev/) 0.7+、`nfpm` 与 `appimagetool`，由 `cargo xtask package-linux` 生成 AppImage、deb、rpm 与 pacman 包；deb/rpm/pacman 包会声明 `bluez`、GTK 4.14+、D-Bus、GStreamer 与 GLib 依赖，AppImage 依赖宿主系统的这些运行库与蓝牙服务。目前 `cargo xtask check` 中的 Gradle 桌面测试仍保留，CI 的 `Checks` 作业为此额外安装 `libgtk-3-0t64 libegl1 libgl1 libfontconfig1`。
+- Windows 桌面构建需要 `rust-toolchain.toml` 固定的 Rust（MSVC 工具链）和 Visual Studio C++ Build Tools。
 - 仓库自带 Gradle Wrapper。Windows 下把 `./gradlew` 换成 `.\gradlew.bat`。
 
 ```bash
 git clone https://github.com/DOHEX/OpenRose.git
 cd OpenRose
-./gradlew :desktopApp:run              # 运行桌面版
-./gradlew :androidApp:assembleDebug    # 构建 Android 调试 APK
+(cd desktop && nsh run)               # 运行 NSH 桌面端
+cargo xtask package-linux             # 构建 Linux AppImage / deb / rpm / pacman
+./gradlew :androidApp:assembleDebug   # 构建 Android 调试 APK
 ```
 
 ## 模块结构
@@ -100,14 +101,14 @@ cd OpenRose
 - Spotless 不会把 `.editorconfig` 的改动当作输入变化：修改 `.editorconfig` 后请运行 `./gradlew spotlessApply --rerun-tasks`。
 - 全仓格式化提交记录在 `.git-blame-ignore-revs` 中。GitHub 的 blame 会自动跳过它；本地运行一次 `git config blame.ignoreRevsFile .git-blame-ignore-revs` 即可同样跳过。
 
-CI 还会构建 Android 调试 APK 并打包桌面版。Windows 作业对 WinRT 助手运行 `cargo fmt -- --check`、`cargo clippy --locked --all-targets -- -D warnings` 和 `cargo test --locked`。影响 Android 安装包的 PR 会运行 release 变体的完整 lint、构建未签名的 release APK，并核对 R8 后的模块入口和系统呈现资源。文档 PR 在部署前运行站点构建与站内链接检查。
+CI 还会构建 Android 调试 APK、构建 Linux 桌面安装包（AppImage、deb、rpm、pacman），并在干净的 `ubuntu:24.04` 容器中安装验证 `.deb` 包。影响 Android 安装包的 PR 会运行 release 变体的完整 lint、构建未签名的 release APK，并核对 R8 后的模块入口和系统呈现资源。旧版 JVM 桌面端已不再发布，Windows NSH 安装包将在 #160 接入。文档 PR 在部署前运行站点构建与站内链接检查。
 
 本地构建命令：
 
 ```bash
 cargo xtask check
+cargo xtask package-linux
 ./gradlew :androidApp:assembleDebug
-./gradlew :desktopApp:packageDistributionForCurrentOS
 ```
 
 ## 提交规范
@@ -135,7 +136,7 @@ PR 标题同样遵循这一格式，并由 `.github/workflows/pr-title.yml` 检�
 
 因此提交类型要如实反映变更性质：`feat` 对应新功能，`fix` 对应缺陷修复。
 
-版本号只来自 `version.txt`，不要手动修改它，也不要在别处写版本号。`build-logic` 的 `AppVersion` 由它推导各平台的版本：发布构建为 `X.Y.Z`，其他构建为 `X.Y.Z-dev+<短提交号>`；Android `versionCode` 为 `MAJOR×1000000 + MINOR×1000 + PATCH`；桌面安装包只用 `X.Y.Z`。CI 构建发布标签时会检查标签与 `version.txt` 一致。依据见 [ADR 0015](docs/adr/0015-single-version-source.md)。
+版本号只来自 `version.txt`，不要手动修改它，也不要在别处写版本号。`cargo xtask sync-version` 与 `build-logic` 的 `AppVersion` 由它推导各平台的版本：Rust/NSH 工作区与桌面安装包使用 `X.Y.Z`，Android 构建在发布时为 `X.Y.Z`，其余构建为 `X.Y.Z-dev+<短提交号>`，`versionCode` 为 `MAJOR×1000000 + MINOR×1000 + PATCH`。CI 构建发布标签时会检查标签与 `version.txt` 一致。依据见 [ADR 0015](docs/adr/0015-single-version-source.md)。
 
 每个发布附带 `SHA256SUMS`，所有安装包还带有由发布工作流签名的构建来源证明（SLSA provenance）。下载后可以这样校验：
 
