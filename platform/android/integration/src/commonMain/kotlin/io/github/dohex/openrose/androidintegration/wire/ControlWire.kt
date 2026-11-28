@@ -1,65 +1,14 @@
 package io.github.dohex.openrose.androidintegration.wire
 
-import io.github.dohex.openrose.androidintegration.HostPlatformFacts
 import io.github.dohex.openrose.core.ControlError
 import io.github.dohex.openrose.core.ControlErrorCode
-import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.OperationResult
-import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.SessionReference
-import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.TouchBinding
 import io.github.dohex.openrose.core.transport.DeviceId
-import kotlinx.collections.immutable.toPersistentList
-
-data class OwnedControlState(val platform: HostPlatformFacts, val state: ControlState)
 
 object ControlWire {
-    fun encodeOwned(platform: HostPlatformFacts, state: ControlState): Wire = obj(
-        "permission" to Wire.Str(platform.permission.name),
-        "scanPermission" to Wire.Str(platform.scanPermission.name),
-        "transport" to encode(platform.transport),
-        "connection" to encode(state.connection),
-        "scan" to encode(state.scan),
-        "candidates" to arr(state.candidates.map(::encode)),
-        "bonded" to arr(state.bondedDevices.map(::encode)),
-        "device" to state.device?.let(::encode),
-        "error" to state.lastError?.let(::encode),
-        "operations" to arr(state.settingOperations.map(::encode)),
-        "selection" to state.transportSelection?.let(::encode),
-        "recovery" to state.connectionRecovery?.let(::encode),
-        "target" to state.connectionTarget?.let(::encode),
-        "audioDevice" to state.audioDeviceId?.value?.let(::str),
-        "selectedHeadset" to state.selectedHeadsetId?.value?.let(::str),
-    )
-
-    fun decodeOwned(wire: Wire): OwnedControlState {
-        val node = wire.asObj()
-        return OwnedControlState(
-            platform = HostPlatformFacts(
-                node.field("permission").asEnum(),
-                decodeTransport(node.field("transport")),
-                node.field("scanPermission").asEnum(),
-            ),
-            state = ControlState(
-                platform = io.github.dohex.openrose.core.PlatformState(PermissionState.NOT_REQUIRED),
-                connection = decodeConnection(node.field("connection")),
-                scan = decodeScan(node.field("scan")),
-                candidates = node.arr("candidates").map(::decodeCandidate).toPersistentList(),
-                bondedDevices = node.arr("bonded").map(::decodeCandidate).toPersistentList(),
-                device = node.optional("device")?.let(::decodeDevice),
-                lastError = node.optional("error")?.let(::decodeError),
-                settingOperations = node.arr("operations").map(::decodeOperation).toPersistentList(),
-                transportSelection = node.optional("selection")?.let(::decodeSelection),
-                connectionRecovery = node.optional("recovery")?.let(::decodeRecovery),
-                connectionTarget = node.optional("target")?.let(::decodeCandidate),
-                audioDeviceId = node.optional("audioDevice")?.let { DeviceId(it.asStr()) },
-                selectedHeadsetId = node.optional("selectedHeadset")?.let { DeviceId(it.asStr()) },
-            ),
-        )
-    }
-
     fun encode(reference: SessionReference): Wire = obj("device" to str(reference.deviceId.value), "session" to num(reference.sessionId))
     fun decodeReference(wire: Wire): SessionReference = wire.asObj()
         .let { SessionReference(DeviceId(it.str("device")), it.long("session")) }

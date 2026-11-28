@@ -11,24 +11,27 @@ import io.github.dohex.openrose.androidintegration.SystemEndpointDiagnostics
 import io.github.dohex.openrose.androidintegration.SystemNoiseState
 import io.github.dohex.openrose.androidintegration.SystemPresentationState
 import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.TransportAvailability
+import io.github.dohex.openrose.core.TransportUnavailableReason
 import io.github.dohex.openrose.ffi.CoreDecodeResult
 import io.github.dohex.openrose.ffi.decodeControlSnapshot
 import io.github.dohex.openrose.ffi.encodeToBytes
 import uniffi.openrose_control.ControlSnapshot
 import kotlin.io.encoding.Base64
 
-class HostSnapshotFormatException(val error: CoreDecodeResult.Error) : WireFormatException(
-    when (error) {
-        is CoreDecodeResult.Error.Malformed -> "宿主状态快照损坏：${error.detail}"
-        is CoreDecodeResult.Error.UnsupportedVersion -> "宿主状态快照版本不兼容：期望 ${error.expected}，实际 ${error.actual}"
-    },
-)
+class HostSnapshotFormatException(val error: CoreDecodeResult.Error) :
+    WireFormatException(
+        when (error) {
+            is CoreDecodeResult.Error.Malformed -> "宿主状态快照损坏：${error.detail}"
+            is CoreDecodeResult.Error.UnsupportedVersion -> "宿主状态快照版本不兼容：期望 ${error.expected}，实际 ${error.actual}"
+        },
+    )
 
 object HostFrameWire {
     fun encode(frame: HostFrame): Wire = obj(
         "generation" to HostIdentityWire.encode(frame.generation),
         "holder" to HostIdentityWire.encode(frame.holder),
-        "platform" to encodePlatform(frame.platform),
+        "platform" to PlatformWire.encode(frame.platform),
         "snapshot" to str(Base64.encode(frame.snapshot.encodeToBytes())),
         "presentation" to encodePresentation(frame.presentation),
         "facts" to encode(frame.facts),
@@ -39,25 +42,43 @@ object HostFrameWire {
         return HostFrame(
             HostIdentityWire.decodeGeneration(node.field("generation")),
             HostIdentityWire.decodeHolder(node.field("holder")),
-            decodePlatform(node.field("platform")),
+            PlatformWire.decode(node.field("platform")),
             decodeSnapshot(node.str("snapshot")),
             decodePresentation(node.field("presentation")),
             decodeFacts(node.field("facts")),
         )
     }
 
-    private fun encodePlatform(platform: HostPlatformFacts): Wire = obj(
-        "permission" to Wire.Str(platform.permission.name),
-        "scanPermission" to Wire.Str(platform.scanPermission.name),
-        "transport" to encode(platform.transport),
-    )
-
-    private fun decodePlatform(wire: Wire): HostPlatformFacts = wire.asObj().let { node ->
-        HostPlatformFacts(
-            node.field("permission").asEnum(),
-            decodeTransport(node.field("transport")),
-            node.field("scanPermission").asEnum(),
+    private object PlatformWire {
+        fun encode(platform: HostPlatformFacts): Wire = obj(
+            "permission" to Wire.Str(platform.permission.name),
+            "scanPermission" to Wire.Str(platform.scanPermission.name),
+            "transport" to encodeTransport(platform.transport),
         )
+
+        fun decode(wire: Wire): HostPlatformFacts = wire.asObj().let { node ->
+            HostPlatformFacts(
+                node.field("permission").asEnum(),
+                decodeTransport(node.field("transport")),
+                node.field("scanPermission").asEnum(),
+            )
+        }
+
+        private fun encodeTransport(availability: TransportAvailability): Wire = when (availability) {
+            TransportAvailability.Available -> obj("t" to str("available"))
+            TransportAvailability.Disabled -> obj("t" to str("disabled"))
+            is TransportAvailability.Unavailable -> UnavailableReasonWire.encode(availability.reason)
+        }
+
+        private fun decodeTransport(wire: Wire): TransportAvailability {
+            val node = wire.asObj()
+            return when (val kind = node.str("t")) {
+                "available" -> TransportAvailability.Available
+                "disabled" -> TransportAvailability.Disabled
+                "unavailable" -> TransportAvailability.Unavailable(UnavailableReasonWire.decode(node))
+                else -> throw WireFormatException("未知传输状态 $kind")
+            }
+        }
     }
 
     private fun decodeSnapshot(encoded: String): ControlSnapshot {
@@ -188,5 +209,55 @@ object HostFrameWire {
             },
             presentation = node.field("presentation").asObj().fields.mapValues { (_, text) -> text.asStr() },
         )
+    }
+
+    private object UnavailableReasonWire {
+        private val fixedReasons = mapOf(
+            "BLE_UNSUPPORTED" to TransportUnavailableReason.BleUnsupported,
+            "PERMISSION_REQUIRED" to TransportUnavailableReason.PermissionRequired,
+            "NO_ADAPTER" to TransportUnavailableReason.NoAdapter,
+            "ADAPTER_POWERED_OFF" to TransportUnavailableReason.AdapterPoweredOff,
+            "ADAPTER_STATE_UNKNOWN" to TransportUnavailableReason.AdapterStateUnknown,
+            "ACCESS_DENIED" to TransportUnavailableReason.AccessDenied,
+            "SERVICE_UNAVAILABLE" to TransportUnavailableReason.ServiceUnavailable,
+            "INITIALIZING" to TransportUnavailableReason.Initializing,
+            "RECOVERING" to TransportUnavailableReason.Recovering,
+            "SHUTTING_DOWN" to TransportUnavailableReason.ShuttingDown,
+            "CLOSED" to TransportUnavailableReason.Closed,
+        )
+
+        private val fixedCodes = fixedReasons.entries.associate { (code, reason) -> reason to code }
+
+        fun encode(reason: TransportUnavailableReason): Wire = when (reason) {
+            is TransportUnavailableReason.UnsupportedPlatform -> obj(
+                "t" to str("unavailable"),
+                "code" to str("UNSUPPORTED_PLATFORM"),
+                "platform" to reason.platform?.let(::str),
+            )
+
+            is TransportUnavailableReason.MissingDependency -> obj(
+                "t" to str("unavailable"),
+                "code" to str("MISSING_DEPENDENCY"),
+                "detail" to reason.detail?.let(::str),
+            )
+
+            is TransportUnavailableReason.BackendUnavailable -> obj(
+                "t" to str("unavailable"),
+                "code" to str("BACKEND_UNAVAILABLE"),
+                "detail" to reason.detail?.let(::str),
+            )
+
+            else -> obj(
+                "t" to str("unavailable"),
+                "code" to str(fixedCodes.getValue(reason)),
+            )
+        }
+
+        fun decode(node: Wire.Obj): TransportUnavailableReason = when (val code = node.str("code")) {
+            "UNSUPPORTED_PLATFORM" -> TransportUnavailableReason.UnsupportedPlatform(node.optional("platform")?.asStr())
+            "MISSING_DEPENDENCY" -> TransportUnavailableReason.MissingDependency(node.optional("detail")?.asStr())
+            "BACKEND_UNAVAILABLE" -> TransportUnavailableReason.BackendUnavailable(node.optional("detail")?.asStr())
+            else -> fixedReasons[code] ?: throw WireFormatException("未知传输不可用原因 $code")
+        }
     }
 }

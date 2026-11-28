@@ -14,6 +14,7 @@ import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import io.github.dohex.openrose.core.transport.Advertisement
 import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.ffi.kotlincore.CoreBackedRuntime
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -234,6 +235,9 @@ internal class OwnerRig(
     private val ids = generateSequence(1) { it + 1 }.map { "id-$it" }.iterator()
     private val platform = grantedAndroidPlatform
 
+    var hostCore: CoreBackedRuntime? = null
+        private set
+
     private var hostScope: CoroutineScope = newHostScope()
     private var hostCount = 0
     var host = newHost()
@@ -248,7 +252,9 @@ internal class OwnerRig(
         return ModuleControlHost(
             packageName = HOST_PACKAGE, processName = HOST_PACKAGE, incarnation = "host-$hostCount",
             authority = testAuthority,
-            runtimeFactory = hostHeadset::runtime,
+            runtimeFactory = { scope, settings, initialPlatform, sessionIdBase ->
+                hostHeadset.runtime(scope, settings, initialPlatform, sessionIdBase).also { hostCore = it }
+            },
             parentScope = hostScope, newId = { "lease-${ids.next()}" }, uid = 1002, pid = 777 + hostCount,
         )
     }

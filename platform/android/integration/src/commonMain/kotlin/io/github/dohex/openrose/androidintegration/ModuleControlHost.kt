@@ -11,6 +11,7 @@ import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SessionReference
 import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.ffi.kotlincore.CoreBackedRuntime
+import io.github.dohex.openrose.ffi.kotlincore.toControlState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -228,20 +230,21 @@ class ModuleControlHost(
             }
             return callbackFlow {
                 val collector = launch {
-                    combine(active.runtime.views(active.generation), active.coreState, facts) { view, snapshot, reported ->
+                    combine(active.coreState, active.runtime.presentationInputs, facts) { snapshot, _, reported ->
+                        val state = snapshot.toControlState()
                         HostFrame(
-                            view.generation,
+                            active.generation,
                             active.holder,
                             HostPlatformFacts(
-                                view.state.platform.permission,
-                                view.state.platform.transport,
-                                view.state.platform.scanPermission,
+                                state.platform.permission,
+                                state.platform.transport,
+                                state.platform.scanPermission,
                             ),
                             snapshot,
-                            view.presentation,
+                            active.runtime.present(state),
                             reported,
                         )
-                    }.collect { send(it) }
+                    }.distinctUntilChanged().collect { send(it) }
                 }
                 launch {
                     active.ended.await()
