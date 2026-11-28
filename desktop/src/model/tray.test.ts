@@ -18,6 +18,10 @@ import {
   supportedTrayControls,
   trayPanelSettingsSummary,
 } from "./trayPanelSettings";
+import {
+  normalizeLoginLaunchStatus,
+  shouldStartMainWindowAtLaunch,
+} from "./loginLaunch";
 
 function capabilities(overrides: Partial<HeadsetCapabilities> = {}): HeadsetCapabilities {
   return {
@@ -261,4 +265,61 @@ test("panel controls default to the first three, reorder and intersect with mode
   expect(moveTrayControl(settings, "game_mode", -1).controlOrder[0]).toBe("game_mode");
   expect(normalizeTrayPanelSettings({ showNoiseLevels: false, enabledControls: [], controlOrder: ["equalizer"] }).controlOrder)
     .toEqual(["equalizer", "game_mode", "spatial_audio", "independent_mic"]);
+});
+
+test("login launch status normalizes installed, unsupported and off-by-default states", () => {
+  expect(normalizeLoginLaunchStatus({ installed: false, supported: true, enabled: false })).toEqual({
+    kind: "hidden",
+    reason: "仅安装版可设置登录时启动",
+  });
+  expect(
+    normalizeLoginLaunchStatus({
+      installed: true,
+      supported: false,
+      enabled: false,
+      reason: "当前系统暂不支持登录时启动",
+    }),
+  ).toEqual({
+    kind: "unsupported",
+    reason: "当前系统暂不支持登录时启动",
+  });
+  expect(normalizeLoginLaunchStatus({ installed: true, supported: true, enabled: false })).toEqual({
+    kind: "ready",
+    enabled: false,
+  });
+  expect(normalizeLoginLaunchStatus({ installed: true, supported: true, enabled: true })).toEqual({
+    kind: "ready",
+    enabled: true,
+  });
+});
+
+test("login launch skips the main window only when started at login with background control and an available tray", () => {
+  expect(
+    shouldStartMainWindowAtLaunch({
+      startedAtLogin: false,
+      backgroundControl: true,
+      availability: { status: "available" },
+    }),
+  ).toBe(true);
+  expect(
+    shouldStartMainWindowAtLaunch({
+      startedAtLogin: true,
+      backgroundControl: true,
+      availability: { status: "available" },
+    }),
+  ).toBe(false);
+  expect(
+    shouldStartMainWindowAtLaunch({
+      startedAtLogin: true,
+      backgroundControl: false,
+      availability: { status: "available" },
+    }),
+  ).toBe(true);
+  expect(
+    shouldStartMainWindowAtLaunch({
+      startedAtLogin: true,
+      backgroundControl: true,
+      availability: { status: "unavailable", reason: "no watcher" },
+    }),
+  ).toBe(true);
 });

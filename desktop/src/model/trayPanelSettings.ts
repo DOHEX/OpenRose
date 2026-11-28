@@ -164,7 +164,7 @@ export function createDesktopSettingsStore(): DesktopSettingsStore {
   const settings = signal<DesktopSettings>(DEFAULT_DESKTOP_SETTINGS);
   let edited = false;
 
-  void Storage.getItem(STORAGE_KEY)
+  const whenLoaded = Storage.getItem(STORAGE_KEY)
     .then((raw) => {
       if (!edited) settings.set(parseSettings(raw));
     })
@@ -178,6 +178,7 @@ export function createDesktopSettingsStore(): DesktopSettingsStore {
   };
 
   return {
+    whenLoaded,
     backgroundControl: () => settings().backgroundControl,
     trayPanel: () => settings().trayPanel,
     setBackgroundControl: (enabled: boolean) => update({ ...settings(), backgroundControl: enabled }),
@@ -195,6 +196,7 @@ export function createDesktopSettingsStore(): DesktopSettingsStore {
 }
 
 export interface DesktopSettingsStore {
+  whenLoaded: Promise<void>;
   backgroundControl: () => boolean;
   trayPanel: () => TrayPanelSettings;
   setBackgroundControl: (enabled: boolean) => void;

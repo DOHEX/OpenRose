@@ -194,3 +194,126 @@ test("without background control, or without a tray, closing the window quits", 
   await unavailable.window("main").pressClose();
   await waitForQuit(unavailable);
 });
+
+test("launch at login is hidden in development builds", async () => {
+  const app = await openApp();
+  await app.press("id:nav-tray");
+  expect(app.shows("id:login-launch-row")).toBe(false);
+  expect(app.shows("id:toggle-launch-at-login")).toBe(false);
+});
+
+test("launch at login defaults to off in installed builds, toggles autostart and disables unsupported hosts", async () => {
+  const calls: Array<{ development: boolean; enabled: boolean }> = [];
+  const app = await open("../../App.tsx", {
+    platform: "linux",
+    width: 880,
+    height: 700,
+    modules: {
+      "openrose-native": {
+        "OpenRoseTray.checkAvailability": TRAY_AVAILABLE,
+        "OpenRoseLoginLaunch.status": {
+          installed: true,
+          supported: true,
+          enabled: false,
+          reason: null,
+        },
+        "OpenRoseLoginLaunch.setEnabled": (development: boolean, enabled: boolean) => {
+          calls.push({ development, enabled });
+          return { installed: true, supported: true, enabled, reason: null };
+        },
+      },
+    },
+  });
+  await app.waitFor("id:headset-status-card");
+  await app.press("id:nav-tray");
+  expect(app.shows("id:login-launch-row")).toBe(true);
+  expect(app.accessibility("id:toggle-launch-at-login")?.checked).toBe("false");
+
+  await app.press("id:toggle-launch-at-login");
+  await app.waitUntil(() => app.accessibility("id:toggle-launch-at-login")?.checked === "true");
+  expect(calls).toEqual([{ development: true, enabled: true }]);
+
+  await app.press("id:toggle-launch-at-login");
+  await app.waitUntil(() => app.accessibility("id:toggle-launch-at-login")?.checked === "false");
+  expect(calls).toEqual([
+    { development: true, enabled: true },
+    { development: true, enabled: false },
+  ]);
+
+  const unsupported = await open("../../App.tsx", {
+    platform: "linux",
+    width: 880,
+    height: 700,
+    modules: {
+      "openrose-native": {
+        "OpenRoseTray.checkAvailability": TRAY_AVAILABLE,
+        "OpenRoseLoginLaunch.status": {
+          installed: true,
+          supported: false,
+          enabled: false,
+          reason: "当前系统暂不支持登录时启动",
+        },
+      },
+    },
+  });
+  await unsupported.waitFor("id:headset-status-card");
+  await unsupported.press("id:nav-tray");
+  expect(unsupported.shows("id:login-launch-row")).toBe(true);
+  expect(unsupported.shows("text:当前系统暂不支持登录时启动")).toBe(true);
+  expect(unsupported.accessibility("id:toggle-launch-at-login")?.disabled).toBe(true);
+});
+
+test("login launch starts in tray only when background control and tray are available, otherwise opens main window", async () => {
+  const trayOnly = await open("../../App.tsx", {
+    platform: "linux",
+    width: 880,
+    height: 700,
+    modules: {
+      "openrose-native": {
+        "OpenRoseTray.checkAvailability": TRAY_AVAILABLE,
+        "OpenRoseLoginLaunch.wasStartedAtLogin": true,
+      },
+    },
+  });
+  expect(trayOnly.windowIds()).not.toContain("main");
+  expect(trayOnly.window("main").state()).toBeNull();
+  expect(trayOnly.shows("id:headset-status-card")).toBe(false);
+
+  await trayOnly.reopen();
+  await trayOnly.waitFor("id:headset-status-card");
+  expect(trayOnly.windowIds()).toContain("main");
+  expect(trayOnly.window("main").state()?.visible).toBe(true);
+
+  const backgroundOff = await open("../../App.tsx", {
+    platform: "linux",
+    width: 880,
+    height: 700,
+    storage: {
+      "desktop.settings": JSON.stringify({ backgroundControl: false }),
+    },
+    modules: {
+      "openrose-native": {
+        "OpenRoseTray.checkAvailability": TRAY_AVAILABLE,
+        "OpenRoseLoginLaunch.wasStartedAtLogin": true,
+      },
+    },
+  });
+  await backgroundOff.waitFor("id:headset-status-card");
+  expect(backgroundOff.windowIds()).toContain("main");
+  expect(backgroundOff.window("main").state()?.visible).toBe(true);
+
+  const noTray = await open("../../App.tsx", {
+    platform: "linux",
+    width: 880,
+    height: 700,
+    modules: {
+      "openrose-native": {
+        "OpenRoseTray.checkAvailability": { available: false, reason: "没有已注册的系统托盘宿主" },
+        "OpenRoseLoginLaunch.wasStartedAtLogin": true,
+      },
+    },
+  });
+  await noTray.waitFor("id:headset-status-card");
+  expect(noTray.windowIds()).toContain("main");
+  expect(noTray.window("main").state()?.visible).toBe(true);
+});

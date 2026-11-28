@@ -1,3 +1,4 @@
+import type { LoginLaunchStatus, LoginLaunchStore } from "../../model/loginLaunch";
 import {
   TRAY_PANEL_CONTROL_META,
   isDefaultTrayPanelSettings,
@@ -25,6 +26,7 @@ import {
 
 export interface TraySettingsPageProps {
   settings: DesktopSettingsStore;
+  loginLaunch: LoginLaunchStore;
   availability: TrayAvailability;
   panelOpen: boolean;
   onTogglePanel: () => void;
@@ -32,6 +34,13 @@ export interface TraySettingsPageProps {
 
 export function TraySettingsPage(props: TraySettingsPageProps) {
   const panel = () => normalizeTrayPanelSettings(props.settings.trayPanel());
+  props.loginLaunch.refresh();
+  const loginLaunchStatus = () => props.loginLaunch.status();
+  const loginLaunchSummary = (status: LoginLaunchStatus) =>
+    status.kind === "unsupported"
+      ? status.reason
+      : "开启后台控制且托盘可用时，登录后仅驻留托盘不打开主窗口；否则打开主窗口";
+  const loginLaunchError = () => props.loginLaunch.error();
   const unavailableReason = () =>
     props.availability.status === "unavailable" ? props.availability.reason : null;
 
@@ -60,6 +69,36 @@ export function TraySettingsPage(props: TraySettingsPageProps) {
             onChange={props.settings.setBackgroundControl}
           />
         </Row>
+        {loginLaunchStatus().kind !== "hidden" ? (
+          <>
+            <Divider />
+            <Row testID="login-launch-row" class="items-center justify-between gap-3">
+              <Column class="flex-1 gap-0.5">
+                <BodyText class="font-medium">登录时启动</BodyText>
+                <MutedText testID="login-launch-summary">
+                  {loginLaunchSummary(loginLaunchStatus())}
+                </MutedText>
+              </Column>
+              <ToggleSwitch
+                testID="toggle-launch-at-login"
+                checked={(() => {
+                  const current = loginLaunchStatus();
+                  return current.kind === "ready" && current.enabled;
+                })()}
+                disabled={loginLaunchStatus().kind !== "ready" || props.loginLaunch.busy()}
+                accessibilityLabel="登录时启动"
+                onChange={(enabled) => void props.loginLaunch.setEnabled(enabled)}
+              />
+            </Row>
+          </>
+        ) : null}
+        {loginLaunchError() ? (
+          <NoticeBanner
+            testID="login-launch-error"
+            tone="danger"
+            title={loginLaunchError()!}
+          />
+        ) : null}
         {unavailableReason() ? (
           <NoticeBanner
             testID="tray-unavailable-reason"
