@@ -68,6 +68,13 @@ status: accepted
       `GattError`、`SppError` 是结构体，而 `uniffi::Error` 只能派生在枚举上，且 `GattError` 已作为 `uniffi::Record` 出现在 `GattEvent::Disconnected`。`DriverError` 定义在 `crates/ffi`，与回调接口同属 `openrose_ffi` 命名空间，不触发缓冲区包不一致；不含 `Recoverable`，因为可恢复失败只由 `control` 自己依据 `GattFailureKind::Transient` 产生。UniFFI 在降级处补上缓冲区转换后，改为派生在核心类型上并删除 `DriverError`。
   - `android/`：Gradle 根目录。`desktop/`：NSH 应用，`desktop/ext/openrose-native` 是组合核心与本机驱动的 nshm 适配层。
 - **核心分层**：`headset` 是 sans-IO 纯逻辑；`control` 与 `circulation` 是 async，经 trait 注入 IO，运行时为 tokio，UniFFI 以 `async_runtime = "tokio"` 导出。跨 crate 使用的项须为 `pub`，这是用编译器保证分层的代价。
+  - **流转协议与信任存储（#164）**：`crates/circulation` 重新设计局域网协议，不兼容旧 Kotlin 线协议：
+    - **错误与术语**：对端之间只传 `RemoteError` 原因代码，不传界面显示文本，文案由界面映射；另一台已配对音源设备在界面与词汇表称“对端”（代码 `Peer` / `PeerId`）。
+    - **传输与认证**：使用 `rustls`（`ring` provider）与 `rcgen` 生成的自签名 P-256 证书，对端证书 SHA-256 指纹即为 `PeerId`，在 TLS 握手期间通过自定义 `ServerCertVerifier` / `ClientCertVerifier` 直接钉扎（pin）校验，而不是握手后再校验。
+    - **流转配对**：采用 SPAKE2（`spake2` crate，6 位数字配对码，120 秒有效期与 5 次尝试上限），并将双方 TLS 证书指纹编入 SPAKE2 身份与密钥确认摘要，防止中间人替换证书。QR 载荷包含配对码、响应方指纹、地址与端口；手动配对由用户从发现列表选取对端后输入配对码。响应方先把待提交授权挂起，收到发起方确认回执后才写入信任存储并消耗配对码；最后一条确认丢包不留下半配对状态。
+    - **撤销**：主动解除配对时立即移除本地信任并拒绝该对端，同时尽力发送 `Forget` 通知；未配对或已撤销对端的任何请求均返回 `NotPaired`，接收方据此自动清理本地记录。
+    - **静态密钥**：本机私钥/证书与已配对对端授权存放在应用数据目录中，Unix 下使用 `0600` 原子替换写入；暂不接入系统钥匙串。
+    - **线协议、端口与发现**：4 字节大端长度前缀的 `serde_json` 帧，单帧上限 64 KiB，每帧携带 `version`；版本不匹配时回复 `UnsupportedVersion` 并关闭连接。桌面端监听 `21871` 端口，占用时回退临时端口并由发现层通告实际端口。桌面端经 `crates/desktop-platform/src/discovery.rs` 使用纯 Rust 的 `mdns-sd` 实现 `PeerDiscovery`（服务类型 `_openrose._tcp.local.`，TXT 记录含 `id`、`name` ≤ 60 字符与 `v` 线协议版本）；Android 发现层在 #170 前保留 Kotlin，`PeerDiscovery` 仅传递套接字地址。
 - **构建入口**：`cargo xtask check` 取代 `./gradlew offlineCheck`，运行 Rust 测试、clippy、Kotlin 测试、`nsh check` 与 `nsh test`。不用 justfile，因为它的命令依赖 shell，在 Windows 上不便。
 - **版本**：版本号仍只来自 `version.txt`（[ADR 0015](0015-single-version-source.md)）。`xtask/src/version.rs` 提供 `sync_workspace_version`（`cargo xtask sync-version`）从 `version.txt` 推导根 `Cargo.toml` 的 `[workspace.package].version` 与 `Cargo.lock` 中所有继承工作区版本的成员包版本，并提供 `check_workspace_version`（`cargo xtask check-version`，由 `cargo xtask check` 首位执行）在漂移时使检查失败；发布流中 `release-please-config.json` 通过 `extra-files` 更新 `Cargo.toml`，`.github/workflows/ci.yml` 的 `release-please` 任务在创建或更新发布 PR 后于该分支运行 `cargo xtask sync-version` 自动保持 `Cargo.toml` 与 `Cargo.lock` 与 `version.txt` 一致。桌面端迁入 NSH 后，`nsh.json` 版本与 Android `versionCode` 亦由 xtask 推导并取代 `build-logic` 的 `AppVersion`；安装包版本只用 `X.Y.Z`。
 - **不写注释**：[ADR 0021](0021-no-code-comments.md) 扩展到 Rust 与 TSX，由 xtask 检查，取代 detekt 的 `openrose:NoComments`。Rust 的 `///` 同样禁止，只有 `#[native_module]` 导出的 API 例外，因为 `nsh build` 会把缺文档的导出报为警告。
