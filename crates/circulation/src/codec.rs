@@ -80,6 +80,7 @@ impl CirculationCommand {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+#[allow(clippy::large_enum_variant)]
 pub enum CirculationReply {
     Directory {
         paired: Vec<Peer>,
