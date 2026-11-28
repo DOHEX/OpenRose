@@ -1,4 +1,6 @@
 pub mod contract;
+pub mod identity;
+pub mod trust;
 
 pub use contract::{
     BatterySlots, DEFAULT_PORT, LocalAudio, MAX_ADVERTISED_NAME_LEN, MDNS_SERVICE_TYPE,
