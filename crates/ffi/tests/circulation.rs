@@ -123,9 +123,12 @@ impl PeerRoute for ForeignTcpRoute {
             });
         };
         let mut buf = vec![0u8; 4096];
-        let n = reader.read(&mut buf).await.map_err(|e| DriverError::Terminal {
-            detail: e.to_string(),
-        })?;
+        let n = reader
+            .read(&mut buf)
+            .await
+            .map_err(|e| DriverError::Terminal {
+                detail: e.to_string(),
+            })?;
         buf.truncate(n);
         Ok(buf)
     }
@@ -228,7 +231,10 @@ impl LocalAudio for ForeignAudio {
     }
 
     async fn acquire(&self, address: String) -> Result<(), DriverError> {
-        self.acquire_calls.lock().expect("acquire calls").push(address);
+        self.acquire_calls
+            .lock()
+            .expect("acquire calls")
+            .push(address);
         self.connected.store(true, Ordering::SeqCst);
         self.media_connected.store(true, Ordering::SeqCst);
         Ok(())
@@ -322,7 +328,10 @@ async fn phone_facade_pairs_serves_remote_read_set_gates_owner_and_yields_on_pul
     world.headset.set_audio_connected(true);
     world.runtime.connect(world.id()).await.expect("connect");
     eventually("phone control connected", || {
-        matches!(world.snapshot().connection, ConnectionState::Connected { .. })
+        matches!(
+            world.snapshot().connection,
+            ConnectionState::Connected { .. }
+        )
     })
     .await;
 
@@ -379,7 +388,9 @@ async fn phone_facade_pairs_serves_remote_read_set_gates_owner_and_yields_on_pul
     assert_eq!(phone.nearby()[0].addresses, vec!["127.0.0.1"]);
 
     let offer = phone.offer_pairing().expect("offer pairing");
-    let current = phone.current_pairing_offer().expect("current pairing offer");
+    let current = phone
+        .current_pairing_offer()
+        .expect("current pairing offer");
     assert_eq!(current.code, offer.code);
     assert_eq!(current.qr, offer.qr);
     let paired = desktop
@@ -389,10 +400,7 @@ async fn phone_facade_pairs_serves_remote_read_set_gates_owner_and_yields_on_pul
     assert_eq!(paired.id, phone.id());
     assert_eq!(phone.peers().len(), 1);
 
-    let reading = desktop
-        .remote_read(&phone.id())
-        .await
-        .expect("remote read");
+    let reading = desktop.remote_read(&phone.id()).await.expect("remote read");
     assert_eq!(reading.status, RemoteControlStatus::Ready);
     let session = reading.session.clone().expect("session");
 
@@ -421,7 +429,10 @@ async fn phone_facade_pairs_serves_remote_read_set_gates_owner_and_yields_on_pul
 
     let outcome = desktop.pull(I5_ADDRESS).await.expect("desktop pulls");
     assert_eq!(outcome, PullOutcome::Acquired);
-    assert_eq!(phone_audio.yield_calls.lock().expect("yield").as_slice(), &[I5_ADDRESS]);
+    assert_eq!(
+        phone_audio.yield_calls.lock().expect("yield").as_slice(),
+        &[I5_ADDRESS]
+    );
     eventually("phone disconnected after yield", || {
         matches!(world.snapshot().connection, ConnectionState::Disconnected)
     })
@@ -430,10 +441,14 @@ async fn phone_facade_pairs_serves_remote_read_set_gates_owner_and_yields_on_pul
     let status_after = phone.handoff_status(Some(I5_ADDRESS.to_string())).await;
     assert!(!status_after.media_ready);
 
-    phone_audio.refuse_yield.lock().expect("refuse").replace(DriverError::YieldRefused {
-        kind: YieldRefusalKind::InCall,
-        detail: "busy".to_string(),
-    });
+    phone_audio
+        .refuse_yield
+        .lock()
+        .expect("refuse")
+        .replace(DriverError::YieldRefused {
+            kind: YieldRefusalKind::InCall,
+            detail: "busy".to_string(),
+        });
     assert!(matches!(
         phone_audio.yield_audio(I5_ADDRESS.to_string()).await,
         Err(DriverError::YieldRefused {
@@ -446,7 +461,12 @@ async fn phone_facade_pairs_serves_remote_read_set_gates_owner_and_yields_on_pul
         .pull("   ".to_string())
         .await
         .expect_err("blank address rejected");
-    assert_eq!(err, CirculationFailure::Failed { error: RemoteError::InvalidArgument });
+    assert_eq!(
+        err,
+        CirculationFailure::Failed {
+            error: RemoteError::InvalidArgument
+        }
+    );
 
     let _ = phone_dialer.dials();
     phone.close_node().await;
@@ -502,10 +522,7 @@ async fn phone_facade_uses_foreign_dialer_for_outbound_route_and_pull() {
     eventually("phone sees desktop", || phone.nearby().len() == 1).await;
 
     let offer = desktop.offer_pairing().expect("desktop offer");
-    let paired = phone
-        .pair_qr(offer.qr)
-        .await
-        .expect("phone pairs via qr");
+    let paired = phone.pair_qr(offer.qr).await.expect("phone pairs via qr");
     assert_eq!(paired.id, *desktop.id());
     assert!(phone_dialer.dials() >= 1);
 
@@ -516,7 +533,11 @@ async fn phone_facade_uses_foreign_dialer_for_outbound_route_and_pull() {
     assert_eq!(outcome, PullOutcome::Acquired);
     assert!(!desktop_audio.media_connected.load(Ordering::SeqCst));
     assert_eq!(
-        phone_audio.acquire_calls.lock().expect("acquire").as_slice(),
+        phone_audio
+            .acquire_calls
+            .lock()
+            .expect("acquire")
+            .as_slice(),
         &[I5_ADDRESS]
     );
 
@@ -525,6 +546,254 @@ async fn phone_facade_uses_foreign_dialer_for_outbound_route_and_pull() {
 
     phone.close_node().await;
     desktop.close().await;
+}
+
+struct Facade {
+    node: Arc<CirculationNode>,
+    discovery: Arc<ForeignDiscovery>,
+    audio: Arc<ForeignAudio>,
+    port: u16,
+    _dir: TempDir,
+}
+
+impl Facade {
+    async fn start(world: &World, name: &str, audio: ForeignAudio) -> Self {
+        let dir = TempDir::new(name);
+        let discovery = Arc::new(ForeignDiscovery::default());
+        let audio = Arc::new(audio);
+        let node = CirculationNode::new(
+            dir.0.to_string_lossy().to_string(),
+            name.to_string(),
+            Some(0),
+            Arc::clone(&world.runtime),
+            discovery.clone(),
+            audio.clone(),
+            Arc::new(ForeignDialer::new()),
+            Arc::new(FlagOwner::new(true)),
+        )
+        .expect("facade");
+        let port = node.start().await.expect("start facade");
+        Self {
+            node,
+            discovery,
+            audio,
+            port,
+            _dir: dir,
+        }
+    }
+
+    fn record(&self) -> NearbyPeerRecord {
+        NearbyPeerRecord {
+            id: self.node.id(),
+            name: self.node.name(),
+            addresses: vec!["127.0.0.1".to_string()],
+            port: self.port,
+        }
+    }
+}
+
+async fn linked_pair(server_audio: ForeignAudio) -> (World, World, Facade, Facade) {
+    let server_world = World::i5();
+    server_world.headset.set_audio_connected(true);
+    server_world
+        .runtime
+        .connect(server_world.id())
+        .await
+        .expect("connect");
+    eventually("server control connected", || {
+        matches!(
+            server_world.snapshot().connection,
+            ConnectionState::Connected { .. }
+        )
+    })
+    .await;
+    let client_world = World::i5();
+    let server = Facade::start(&server_world, "Server", server_audio).await;
+    let client = Facade::start(&client_world, "Client", ForeignAudio::idle()).await;
+    server.discovery.publish(vec![client.record()]);
+    client.discovery.publish(vec![server.record()]);
+    eventually("client sees server", || client.node.nearby().len() == 1).await;
+    eventually("server sees client", || server.node.nearby().len() == 1).await;
+    (server_world, client_world, client, server)
+}
+
+async fn pair_client_with_server(client: &Facade, server: &Facade) {
+    let CirculationReply::Offer { offer } = server.node.execute(CirculationCommand::Offer).await
+    else {
+        panic!("offer reply");
+    };
+    let reply = client
+        .node
+        .execute(CirculationCommand::PairQr { qr: offer.qr })
+        .await;
+    let CirculationReply::Paired { peer } = reply else {
+        panic!("paired reply, got {reply:?}");
+    };
+    assert_eq!(peer.id, server.node.id());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn execute_runs_directory_offer_pair_and_forget() {
+    let (_sw, _cw, client, server) = linked_pair(ForeignAudio::holding()).await;
+
+    let CirculationReply::Directory {
+        paired,
+        nearby,
+        offer,
+    } = client.node.execute(CirculationCommand::Directory).await
+    else {
+        panic!("directory reply");
+    };
+    assert!(paired.is_empty() && offer.is_none());
+    assert_eq!(nearby.len(), 1);
+    assert_eq!(nearby[0].id, server.node.id());
+
+    let CirculationReply::Offer { offer } = server.node.execute(CirculationCommand::Offer).await
+    else {
+        panic!("offer reply");
+    };
+    let CirculationReply::Directory { offer: shown, .. } =
+        server.node.execute(CirculationCommand::Directory).await
+    else {
+        panic!("directory reply");
+    };
+    let shown = shown.expect("directory carries the open offer");
+    assert_eq!((shown.code, shown.qr), (offer.code, offer.qr));
+
+    pair_client_with_server(&client, &server).await;
+    let CirculationReply::Directory { paired, .. } =
+        client.node.execute(CirculationCommand::Directory).await
+    else {
+        panic!("directory reply");
+    };
+    assert_eq!(paired.len(), 1);
+    assert_eq!(paired[0].id, server.node.id());
+
+    let forgotten = client
+        .node
+        .execute(CirculationCommand::Forget {
+            peer_id: server.node.id(),
+        })
+        .await;
+    assert_eq!(forgotten, CirculationReply::Forgotten);
+    assert!(client.node.peers().is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn execute_turns_pairing_and_read_failures_into_failed_replies() {
+    let (_sw, _cw, client, server) = linked_pair(ForeignAudio::holding()).await;
+
+    let unpaired = client
+        .node
+        .execute(CirculationCommand::Read {
+            peer_id: server.node.id(),
+        })
+        .await;
+    assert_eq!(
+        unpaired,
+        CirculationReply::Failed {
+            error: RemoteError::NotPaired
+        }
+    );
+
+    let rejected = client
+        .node
+        .execute(CirculationCommand::PairQr {
+            qr: "not a qr".to_string(),
+        })
+        .await;
+    assert_eq!(
+        rejected,
+        CirculationReply::Failed {
+            error: RemoteError::InvalidQrPayload
+        }
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn execute_reads_and_sets_the_remote_headset() {
+    let (_sw, _cw, client, server) = linked_pair(ForeignAudio::holding()).await;
+    pair_client_with_server(&client, &server).await;
+
+    let CirculationReply::Reading { reading } = client
+        .node
+        .execute(CirculationCommand::Read {
+            peer_id: server.node.id(),
+        })
+        .await
+    else {
+        panic!("reading reply");
+    };
+    assert_eq!(reading.status, RemoteControlStatus::Ready);
+    let session = reading.session.expect("session");
+
+    let CirculationReply::Reading { reading } = client
+        .node
+        .execute(CirculationCommand::Set {
+            session,
+            command: HeadsetCommand::NoiseMode(NoiseMode::Transparency),
+        })
+        .await
+    else {
+        panic!("set reply");
+    };
+    assert_eq!(reading.noise_mode, Some(NoiseMode::Transparency));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn execute_reports_handoff_and_pulls_audio_from_the_holder() {
+    let (_sw, _cw, client, server) = linked_pair(ForeignAudio::holding()).await;
+    pair_client_with_server(&client, &server).await;
+
+    let CirculationReply::Handoff { status } = server
+        .node
+        .execute(CirculationCommand::Handoff {
+            address: Some(I5_ADDRESS.to_string()),
+        })
+        .await
+    else {
+        panic!("handoff reply");
+    };
+    assert!(status.available && status.media_ready && !status.offline);
+
+    let pulled = client
+        .node
+        .execute(CirculationCommand::Pull {
+            address: I5_ADDRESS.to_string(),
+        })
+        .await;
+    assert_eq!(
+        pulled,
+        CirculationReply::Pulled {
+            outcome: PullOutcome::Acquired
+        }
+    );
+    assert_eq!(
+        server.audio.yield_calls.lock().expect("yield").as_slice(),
+        &[I5_ADDRESS]
+    );
+    assert_eq!(
+        client
+            .audio
+            .acquire_calls
+            .lock()
+            .expect("acquire")
+            .as_slice(),
+        &[I5_ADDRESS]
+    );
+
+    let blank = client
+        .node
+        .execute(CirculationCommand::Pull {
+            address: "  ".to_string(),
+        })
+        .await;
+    assert_eq!(
+        blank,
+        CirculationReply::Failed {
+            error: RemoteError::InvalidArgument
+        }
+    );
 }
 
 #[test]
@@ -565,5 +834,4 @@ fn circulation_codec_exports_round_trip_and_reject_bad_bytes() {
             actual: CIRCULATION_WIRE_FORMAT_VERSION + 1,
         })
     );
-
 }

@@ -131,7 +131,6 @@ impl From<DriverError> for YieldRefusal {
     }
 }
 
-
 #[uniffi::export(foreign)]
 pub trait ControlObserver: Send + Sync + 'static {
     fn state_changed(&self, snapshot: ControlSnapshot);

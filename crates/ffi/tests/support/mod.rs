@@ -4,10 +4,10 @@ mod foreign;
 
 pub use foreign::{FakeHeadset, FixedClock, Recorder};
 
+use openrose_control::SessionTiming;
 use openrose_control::snapshot::{
     ConnectionState, ControlSnapshot, PermissionState, PlatformState, TransportAvailability,
 };
-use openrose_control::SessionTiming;
 use openrose_ffi::{ControlRuntime, ControlSettings};
 use openrose_headset::{FieldReading, FieldValue, HeadsetField, HeadsetId, ModelProfile};
 use std::sync::Arc;

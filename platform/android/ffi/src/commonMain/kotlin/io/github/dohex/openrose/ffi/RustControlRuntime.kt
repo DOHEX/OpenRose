@@ -11,11 +11,16 @@ import uniffi.openrose_control.ControlSettings
 import uniffi.openrose_control.ControlSnapshot
 import uniffi.openrose_control.PlatformState
 import uniffi.openrose_control.SessionTiming
+import uniffi.openrose_ffi.CirculationNode
 import uniffi.openrose_ffi.ControlFailure
 import uniffi.openrose_ffi.ControlObserver
 import uniffi.openrose_ffi.ControlRuntime
 import uniffi.openrose_ffi.ControlTransport
+import uniffi.openrose_ffi.LocalAudio
 import uniffi.openrose_ffi.LocalClock
+import uniffi.openrose_ffi.OwnerActive
+import uniffi.openrose_ffi.PeerDiscovery
+import uniffi.openrose_ffi.PeerRouteDialer
 import uniffi.openrose_ffi.defaultSessionTiming
 import uniffi.openrose_headset.HeadsetCommand
 import uniffi.openrose_headset.HeadsetId
@@ -103,6 +108,25 @@ class RustControlRuntime(
     suspend fun set(command: HeadsetCommand, expectedSession: ULong? = null): RustControlResult = runControl {
         it.set(command, expectedSession)
     }
+
+    fun circulationNode(
+        storageDir: String,
+        name: String,
+        listenPort: UShort? = null,
+        discovery: PeerDiscovery,
+        audio: LocalAudio,
+        dialer: PeerRouteDialer,
+        ownerActive: OwnerActive,
+    ): CirculationNode = CirculationNode(
+        storageDir = storageDir,
+        name = name,
+        listenPort = listenPort,
+        control = handle,
+        discovery = discovery,
+        audio = audio,
+        dialer = dialer,
+        ownerActive = ownerActive,
+    )
 
     override fun close() {
         closed.set(true)

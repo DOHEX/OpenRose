@@ -16,8 +16,13 @@ import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.job
 import uniffi.openrose_control.SessionTiming
+import uniffi.openrose_ffi.CirculationNode
 import uniffi.openrose_ffi.ControlTransport
+import uniffi.openrose_ffi.LocalAudio
 import uniffi.openrose_ffi.LocalClock
+import uniffi.openrose_ffi.OwnerActive
+import uniffi.openrose_ffi.PeerDiscovery
+import uniffi.openrose_ffi.PeerRouteDialer
 import uniffi.openrose_ffi.defaultSessionTiming
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -27,6 +32,7 @@ interface CoreBackedRuntime : ControlRuntime {
     val coreState: StateFlow<RustSnapshot>
 }
 
+@Suppress("TooManyFunctions")
 class CoreControlRuntime internal constructor(
     private val rust: RustControlRuntime,
     scope: CoroutineScope,
@@ -95,6 +101,24 @@ class CoreControlRuntime internal constructor(
     override fun updateSettings(settings: UserSettings) = rust.command { it.updateSettings(settings.toRust()) }
 
     override fun updatePlatformState(platformState: PlatformState) = rust.command { it.updatePlatformState(platformState.toRust()) }
+
+    fun circulationNode(
+        storageDir: String,
+        name: String,
+        listenPort: UShort? = null,
+        discovery: PeerDiscovery,
+        audio: LocalAudio,
+        dialer: PeerRouteDialer,
+        ownerActive: OwnerActive,
+    ): CirculationNode = rust.circulationNode(
+        storageDir = storageDir,
+        name = name,
+        listenPort = listenPort,
+        discovery = discovery,
+        audio = audio,
+        dialer = dialer,
+        ownerActive = ownerActive,
+    )
 }
 
 private class ClosingBarrier(private val close: () -> Unit) {

@@ -47,11 +47,7 @@ import io.github.dohex.openrose.bridge.BridgeTarget
 import io.github.dohex.openrose.bridge.IControlBridge
 import io.github.dohex.openrose.bridge.IControlFrames
 import io.github.dohex.openrose.bridge.IControlObserver
-import io.github.dohex.openrose.bridge.circulationCommand
 import io.github.dohex.openrose.bridge.toBundle
-import io.github.dohex.openrose.circulation.CirculationCommand
-import io.github.dohex.openrose.circulation.CirculationFailure
-import io.github.dohex.openrose.circulation.CirculationReply
 import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.core.NoiseMode
@@ -60,6 +56,7 @@ import io.github.dohex.openrose.core.SessionReference
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.ffi.CoreDecodeResult
 import io.github.dohex.openrose.ffi.coreWireFormatVersion
+import io.github.dohex.openrose.ffi.decodeCirculationCommand
 import io.github.dohex.openrose.ffi.encodeToBytes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -74,6 +71,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import uniffi.openrose_circulation.CirculationCommand
+import uniffi.openrose_circulation.CirculationReply
 import uniffi.openrose_control.ControlSnapshot
 import java.util.concurrent.atomic.AtomicLong
 
@@ -104,7 +103,7 @@ internal class AndroidCallerAuthority(
 internal class OwnerCirculation(
     val generation: OwnerGeneration,
     val scope: CoroutineScope,
-    val call: (CirculationCommand) -> CirculationReply,
+    val call: suspend (CirculationCommand) -> CirculationReply,
 )
 
 @Suppress("TooManyFunctions")
@@ -604,41 +603,42 @@ internal class HostEndpoint(
         fun circulation(request: Bundle): Bundle {
             leaseTable.appLease(request)
             requireVersion(request)
-            val owner = circulationOwner()
-            val generation = (host.status.value as? HostStatus.Active)?.generation
-            val requestedGeneration = request.getString(BridgeWire.HOST_EPOCH)
-            if (owner == null || owner.generation != generation || owner.generation.toString() != requestedGeneration) {
-                return BridgeBundles.response(BridgeWire.STATUS_UNAVAILABLE, "模块控制尚未就绪")
+            val requested = decodeOrNull { HostIdentityWire.decodeGeneration(parseWire(request.getString(BridgeWire.PAYLOAD).orEmpty())) }
+            val bytes = request.getByteArray(BridgeWire.CIRCULATION)
+            val active = (host.status.value as? HostStatus.Active)?.generation
+            val owner = circulationOwner()?.takeIf { it.generation == active && it.generation == requested }
+            return when {
+                requested == null || bytes == null -> BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+
+                owner == null -> BridgeBundles.response(BridgeWire.STATUS_UNAVAILABLE)
+
+                else -> when (val decoded = decodeCirculationCommand(bytes)) {
+                    is CoreDecodeResult.Ok -> circulationResponse(owner, decoded.value)
+                    is CoreDecodeResult.Error.Malformed -> BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT, decoded.detail)
+                    is CoreDecodeResult.Error.UnsupportedVersion -> BridgeBundles.response(BridgeWire.STATUS_UNSUPPORTED_VERSION)
+                }
             }
-            val payload = request.getBundle(BridgeWire.PAYLOAD)
-            return if (payload == null) BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT) else circulationResponse(owner, payload)
         }
 
-        @Suppress("TooGenericExceptionCaught")
-        private fun circulationResponse(owner: OwnerCirculation, data: Bundle): Bundle {
-            val command = try {
-                data.circulationCommand()
-            } catch (malformed: IllegalArgumentException) {
-                return BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT, malformed.message)
-            }
-            val response = try {
+        private fun circulationResponse(owner: OwnerCirculation, command: CirculationCommand): Bundle {
+            val reply = try {
                 runBlocking {
                     owner.scope.async(Dispatchers.IO) {
-                        check((host.status.value as? HostStatus.Active)?.generation == owner.generation) { "所有者代际已过期" }
+                        check((host.status.value as? HostStatus.Active)?.generation == owner.generation) { "owner generation expired" }
                         owner.call(command)
                     }.await()
                 }
             } catch (cancelled: CancellationException) {
                 if (owner.scope.isActive) throw cancelled
-                return BridgeBundles.response(BridgeWire.STATUS_UNAVAILABLE, "所有者代际已过期")
-            } catch (failure: Exception) {
-                CirculationFailure(failure.localizedMessage ?: "互联操作失败")
+                return BridgeBundles.response(BridgeWire.STATUS_UNAVAILABLE)
+            } catch (_: IllegalStateException) {
+                return BridgeBundles.response(BridgeWire.STATUS_UNAVAILABLE)
             }
             if ((host.status.value as? HostStatus.Active)?.generation != owner.generation) {
-                return BridgeBundles.response(BridgeWire.STATUS_UNAVAILABLE, "所有者代际已过期")
+                return BridgeBundles.response(BridgeWire.STATUS_UNAVAILABLE)
             }
             return BridgeBundles.response(BridgeWire.STATUS_OK).apply {
-                putBundle(BridgeWire.PAYLOAD, response.toBundle())
+                putByteArray(BridgeWire.CIRCULATION, reply.encodeToBytes())
             }
         }
 

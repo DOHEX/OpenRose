@@ -11,7 +11,6 @@ android {
 dependencies {
     implementation(projects.platform.android.bluetoothIpc)
     implementation(projects.platform.android.ffi)
-    implementation(projects.shared.circulationLan)
     implementation(libs.androidx.core)
     compileOnly(libs.libxposed.api)
     testImplementation(libs.libxposed.api)

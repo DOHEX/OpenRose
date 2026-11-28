@@ -46,7 +46,6 @@ impl From<ControlError> for ControlFailure {
     }
 }
 
-
 #[uniffi::export]
 pub fn wire_format_version() -> u8 {
     WIRE_FORMAT_VERSION

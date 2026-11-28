@@ -282,7 +282,13 @@ impl AsyncRead for PeerRouteStream {
             let route = Arc::clone(&this.route);
             this.read_fut = Some(Box::pin(async move { route.read().await }));
         }
-        match this.read_fut.as_mut().expect("read future").as_mut().poll(cx) {
+        match this
+            .read_fut
+            .as_mut()
+            .expect("read future")
+            .as_mut()
+            .poll(cx)
+        {
             Poll::Pending => Poll::Pending,
             Poll::Ready(res) => {
                 this.read_fut = None;
@@ -319,11 +325,20 @@ impl AsyncWrite for PeerRouteStream {
             let len = chunk.len();
             this.write_fut = Some(Box::pin(async move { (len, route.write(chunk).await) }));
         }
-        match this.write_fut.as_mut().expect("write future").as_mut().poll(cx) {
+        match this
+            .write_fut
+            .as_mut()
+            .expect("write future")
+            .as_mut()
+            .poll(cx)
+        {
             Poll::Pending => Poll::Pending,
             Poll::Ready((len, res)) => {
                 this.write_fut = None;
-                Poll::Ready(res.map(|()| len).map_err(|e| io::Error::other(e.to_string())))
+                Poll::Ready(
+                    res.map(|()| len)
+                        .map_err(|e| io::Error::other(e.to_string())),
+                )
             }
         }
     }
@@ -505,6 +520,55 @@ impl CirculationNode {
             .pull(&address)
             .await
             .map_err(CirculationFailure::from)
+    }
+
+    pub async fn execute(&self, command: CirculationCommand) -> CirculationReply {
+        match self.dispatch(command).await {
+            Ok(reply) => reply,
+            Err(CirculationFailure::Failed { error }) => CirculationReply::Failed { error },
+        }
+    }
+}
+
+impl CirculationNode {
+    async fn dispatch(
+        &self,
+        command: CirculationCommand,
+    ) -> Result<CirculationReply, CirculationFailure> {
+        Ok(match command {
+            CirculationCommand::Directory => CirculationReply::Directory {
+                paired: self.peers(),
+                nearby: self.nearby(),
+                offer: self.current_pairing_offer(),
+            },
+            CirculationCommand::Offer => CirculationReply::Offer {
+                offer: self.offer_pairing()?,
+            },
+            CirculationCommand::Pair { peer_id, code } => CirculationReply::Paired {
+                peer: self.pair(peer_id, code).await?,
+            },
+            CirculationCommand::PairQr { qr } => CirculationReply::Paired {
+                peer: self.pair_qr(qr).await?,
+            },
+            CirculationCommand::Forget { peer_id } => {
+                self.forget(peer_id).await?;
+                CirculationReply::Forgotten
+            }
+            CirculationCommand::Read { peer_id } => CirculationReply::Reading {
+                reading: self.remote_read(peer_id).await?,
+            },
+            CirculationCommand::Set { session, command } => CirculationReply::Reading {
+                reading: self
+                    .remote_set(session.peer_id.clone(), session, command)
+                    .await?,
+            },
+            CirculationCommand::Handoff { address } => CirculationReply::Handoff {
+                status: self.handoff_status(address).await,
+            },
+            CirculationCommand::Pull { address } => CirculationReply::Pulled {
+                outcome: self.pull(address).await?,
+            },
+        })
     }
 }
 
