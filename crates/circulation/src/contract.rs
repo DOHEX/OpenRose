@@ -210,6 +210,9 @@ pub enum RemoteError {
     IdentityError,
     StorageError,
     DiscoveryError,
+    PullInProgress,
+    YieldRefused(YieldRefusal),
+    AcquireFailed(YieldRefusal),
 }
 
 impl fmt::Display for RemoteError {
@@ -245,4 +248,28 @@ pub trait LocalAudio: Send + Sync {
     async fn is_media_connected(&self, address: &str) -> bool;
     async fn yield_audio(&self, address: &str) -> Result<YieldReceipt, YieldRefusal>;
     async fn acquire(&self, address: &str) -> Result<(), YieldRefusal>;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum YieldResponse {
+    Yielded(YieldReceipt),
+    NotHolding,
+    Refused(YieldRefusal),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PullOutcome {
+    AlreadyConnected,
+    Acquired,
+    AcquiredWithPeersUnreachable,
+}
+
+pub(crate) fn same_address(left: &str, right: &str) -> bool {
+    match (
+        openrose_control::audio::normalize_bluetooth_address(left),
+        openrose_control::audio::normalize_bluetooth_address(right),
+    ) {
+        (Some(a), Some(b)) => a == b,
+        _ => left.eq_ignore_ascii_case(right),
+    }
 }

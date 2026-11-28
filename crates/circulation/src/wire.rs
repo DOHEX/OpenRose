@@ -1,4 +1,4 @@
-use crate::contract::{RemoteCommand, RemoteError, RemoteReading, WIRE_VERSION};
+use crate::contract::{RemoteCommand, RemoteError, RemoteReading, WIRE_VERSION, YieldResponse};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
@@ -23,6 +23,8 @@ pub enum WireBody {
     Forget { grant: String },
     Ack,
     Error(RemoteError),
+    Yield { grant: String, address: String },
+    YieldReply(YieldResponse),
 }
 
 #[derive(Deserialize)]
