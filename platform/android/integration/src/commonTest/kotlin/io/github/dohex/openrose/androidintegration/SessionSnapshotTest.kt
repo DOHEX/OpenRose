@@ -134,6 +134,7 @@ class SessionSnapshotTest {
 
         val beforeConfirmation = assertIs<SessionSnapshotResult.Available>(session.readSession(reference)).device
         assertEquals(FieldValue.Text("wind"), (beforeConfirmation.diagnostics.fields[DeviceField.NOISE_MODE] as FieldReading.Known).value)
+        eventually("the setting and its read-back query to reach the earphones") { link.writes.size >= initialWrites + 2 }
         assertEquals(initialWrites + 2, link.writes.size)
 
         session.updateSettings(session.state.value.settings.copy(forceBle = true))
