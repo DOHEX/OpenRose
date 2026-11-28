@@ -5,17 +5,18 @@ description: 从源码构建 OpenRose，以及开发文档、许可与致谢。
 
 ## 从源码构建
 
-需要 JDK 21、Rust stable 工具链和 Android SDK（Platform 37、Build Tools 37.0.0，设置 `ANDROID_HOME` 或 `local.properties` 的 `sdk.dir`）。构建 Android APK 还需 `aarch64-linux-android`、`armv7-linux-androideabi`、`x86_64-linux-android` 三个目标与 `cargo-ndk`；构建 Windows 桌面版还需 Rust MSVC 工具链和 Visual Studio C++ Build Tools。Windows 下把 `./gradlew` 换成 `.\gradlew.bat`。
+需要 JDK 21、Rust stable 工具链、[nsh](https://nsh.dev/) 0.7+ 和 Android SDK（Platform 37、Build Tools 37.0.0，设置 `ANDROID_HOME` 或 `local.properties` 的 `sdk.dir`）。构建 Android APK 还需 `aarch64-linux-android`、`armv7-linux-androideabi`、`x86_64-linux-android` 三个目标与 `cargo-ndk`；构建与打包 Linux NSH 桌面版还需 `nfpm`、`appimagetool` 及 GTK 4.14+、GStreamer 和 D-Bus 开发库（`libgtk-4-dev`、`libgstreamer1.0-dev`、`libgstreamer-plugins-base1.0-dev`、`libdbus-1-dev`、`pkg-config`）。Windows 下把 `./gradlew` 换成 `.\gradlew.bat`。
 
 ```bash
 git clone https://github.com/DOHEX/OpenRose.git
 cd OpenRose
 ./gradlew :androidApp:assembleDebug   # Android 调试 APK
-./gradlew :desktopApp:run             # 运行桌面版
-cargo xtask check                     # 不依赖耳机硬件的全部检查（含 Rust 与 Gradle）
+(cd desktop && nsh run)               # 运行 NSH 桌面端
+cargo xtask package-linux             # 构建 Linux AppImage / deb / rpm / pacman
+cargo xtask check                     # 不依赖耳机硬件的全部检查（含 Rust、NSH 与 Gradle）
 ```
 
-提 PR 前必须通过 `cargo xtask check`。它会运行版本一致性校验、Rust 测试与 clippy、源码无注释检查，以及 Gradle 的 `check offlineCheck`（含 Spotless 格式检查、零基线的 detekt 和 Android lint 与覆盖率校验）。开发环境、模块结构、新增型号、界面沙盒和提交规范见 [CONTRIBUTING.md](https://github.com/DOHEX/OpenRose/blob/main/CONTRIBUTING.md)。
+提 PR 前必须通过 `cargo xtask check`。它会运行版本一致性校验、Rust 测试与 clippy、源码无注释检查、NSH 检查与测试，以及 Gradle 的 `check offlineCheck`（含 Spotless 格式检查、零基线的 detekt 和 Android lint 与覆盖率校验）。开发环境、模块结构、新增型号、界面沙盒和提交规范见 [CONTRIBUTING.md](https://github.com/DOHEX/OpenRose/blob/main/CONTRIBUTING.md)。
 
 运行 `./gradlew :tools:ui-sandbox:run` 可检查设置何时可用。选择「初始化中」时，沙盒模拟耳机尚未返回读数，普通设置要等控制连接就绪后才能写入。沙盒按提交顺序写入设置。以 FirstAngel 为例，游戏模式切换成功后，排在后面的 EQ 请求会按新的预设列表校验。把控制台拨回「初始化中」可以模拟重连，之前的设置结果只记入旧会话。
 

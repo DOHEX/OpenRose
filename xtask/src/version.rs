@@ -132,7 +132,7 @@ pub fn read_version_txt(workspace_root: &Path) -> Result<String, String> {
     Ok(trimmed.to_string())
 }
 
-fn validate_semver_triple(text: &str) -> Result<(), String> {
+pub(crate) fn validate_semver_triple(text: &str) -> Result<(), String> {
     let mut parts = text.split('.');
     let Some(major_str) = parts.next() else {
         return Err(format!("version.txt must hold MAJOR.MINOR.PATCH, found '{text}'"));

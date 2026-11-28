@@ -1,4 +1,5 @@
 mod no_comments;
+mod package_linux;
 mod version;
 
 use std::env;
@@ -12,9 +13,10 @@ fn main() -> ExitCode {
         Some("check-version") => run_check_version(&workspace_root()),
         Some("sync-version") => run_sync_version(&workspace_root()),
         Some("no-comments") => run_no_comments(&workspace_root()),
+        Some("package-linux") => package_linux::run_package_linux(&workspace_root()),
         other => {
             eprintln!(
-                "Unknown xtask command: {:?}. Expected: check | check-version | sync-version | no-comments",
+                "Unknown xtask command: {:?}. Expected: check | check-version | sync-version | no-comments | package-linux",
                 other
             );
             ExitCode::FAILURE
@@ -33,7 +35,7 @@ fn cargo_bin() -> String {
     env::var("CARGO").unwrap_or_else(|_| "cargo".to_string())
 }
 
-fn nsh_bin() -> String {
+pub(crate) fn nsh_bin() -> String {
     env::var("NSH").unwrap_or_else(|_| "nsh".to_string())
 }
 
