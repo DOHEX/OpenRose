@@ -14,6 +14,8 @@ import uniffi.openrose_ffi.NearbySink
 import uniffi.openrose_ffi.PeerDiscovery
 import uniffi.openrose_ffi.PeerRoute
 import uniffi.openrose_ffi.PeerRouteDialer
+import uniffi.openrose_ffi.circulationDiscoveryContract
+import uniffi.openrose_ffi.circulationServiceInstanceName
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -44,17 +46,20 @@ internal class AndroidPeerDiscovery(context: Context) :
     private val seen = mutableMapOf<String, ResolvedPeer>()
     private val routes = ConcurrentHashMap<RouteKey, RouteTarget>()
     private var resolving = false
+    private val contract = circulationDiscoveryContract()
+    private val nsdServiceType = contract.serviceType.removeSuffix("local.")
+    private val maxNameLength = contract.maxNameLen.toInt()
 
     override suspend fun start(peerId: String, name: String, port: UShort, wireVersion: UInt, sink: NearbySink) {
         main.post {
             active = true
             val own = NsdServiceInfo().apply {
-                serviceName = serviceName(peerId)
-                serviceType = SERVICE_TYPE
+                serviceName = circulationServiceInstanceName(peerId)
+                serviceType = nsdServiceType
                 this.port = port.toInt()
-                setAttribute(ATTRIBUTE_ID, peerId)
-                setAttribute(ATTRIBUTE_NAME, name.take(MAX_ADVERTISED_NAME))
-                setAttribute(ATTRIBUTE_VERSION, wireVersion.toString())
+                setAttribute(contract.txtKeyId, peerId)
+                setAttribute(contract.txtKeyName, name.take(maxNameLength))
+                setAttribute(contract.txtKeyVersion, wireVersion.toString())
             }
             register(own)
             discover(Listening(peerId, wireVersion, sink))
@@ -84,7 +89,7 @@ internal class AndroidPeerDiscovery(context: Context) :
             override fun onDiscoveryStopped(type: String) = Unit
             override fun onServiceFound(info: NsdServiceInfo) {
                 main.post {
-                    if (!active || info.serviceName == serviceName(listening.id)) return@post
+                    if (!active || info.serviceName == circulationServiceInstanceName(listening.id)) return@post
                     services[info.serviceName] = info
                     pending.add(info)
                     resolve(listening)
@@ -99,7 +104,7 @@ internal class AndroidPeerDiscovery(context: Context) :
             }
         }
         discovery = listener
-        runCatching { nsd.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, listener) }
+        runCatching { nsd.discoverServices(nsdServiceType, NsdManager.PROTOCOL_DNS_SD, listener) }
             .onFailure { retry { discover(listening) } }
     }
 
@@ -146,9 +151,9 @@ internal class AndroidPeerDiscovery(context: Context) :
     }
 
     private fun NsdServiceInfo.resolvedPeer(listening: Listening): ResolvedPeer? {
-        val peerId = attributes[ATTRIBUTE_ID]?.decodeToString()?.trim()?.takeIf { it.isNotEmpty() && it != listening.id }
-        val displayName = attributes[ATTRIBUTE_NAME]?.decodeToString()
-        val version = attributes[ATTRIBUTE_VERSION]?.decodeToString()?.trim()?.toUIntOrNull()
+        val peerId = attributes[contract.txtKeyId]?.decodeToString()?.trim()?.takeIf { it.isNotEmpty() && it != listening.id }
+        val displayName = attributes[contract.txtKeyName]?.decodeToString()
+        val version = attributes[contract.txtKeyVersion]?.decodeToString()?.trim()?.toUIntOrNull()
         if (peerId == null || displayName == null || version != listening.wireVersion) return null
         val addresses = if (Build.VERSION.SDK_INT >= 34) hostAddresses else listOfNotNull(host)
         val factory = if (Build.VERSION.SDK_INT >= 33) network?.socketFactory else null
@@ -156,7 +161,7 @@ internal class AndroidPeerDiscovery(context: Context) :
         val targets = addresses.associate { address ->
             RouteKey(address.hostAddress.orEmpty().substringBefore('%'), port) to RouteTarget(address, socketFactory)
         }
-        val shown = displayName.take(MAX_ADVERTISED_NAME)
+        val shown = displayName.take(maxNameLength)
         val record = NearbyPeerRecord(peerId, shown, targets.keys.map { it.address }, port.toUShort())
         return ResolvedPeer(record, targets)
     }
@@ -186,14 +191,7 @@ internal class AndroidPeerDiscovery(context: Context) :
     }
 
     private companion object {
-        const val SERVICE_TYPE = "_openrose._tcp."
-        const val ATTRIBUTE_ID = "id"
-        const val ATTRIBUTE_NAME = "name"
-        const val ATTRIBUTE_VERSION = "v"
-        const val MAX_ADVERTISED_NAME = 60
         const val RETRY_MILLIS = 3_000L
-
-        fun serviceName(id: String) = "OpenRose-${id.take(20)}"
     }
 }
 

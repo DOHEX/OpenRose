@@ -42,6 +42,9 @@ overrides:
       - libdbus-1-3
       - libgstreamer1.0-0
       - libgstreamer-plugins-base1.0-0
+      - libwebkitgtk-6.0-4
+      - libjavascriptcoregtk-6.0-1
+      - libsoup-3.0-0
       - libglib2.0-bin
       - libcairo2
       - libfontconfig1
@@ -57,6 +60,8 @@ overrides:
       - dbus-libs
       - gstreamer1
       - gstreamer1-plugins-base
+      - webkitgtk6.0
+      - libsoup3
       - glib2
       - cairo
       - fontconfig
@@ -70,6 +75,8 @@ overrides:
       - dbus
       - gstreamer
       - gst-plugins-base-libs
+      - webkitgtk-6.0
+      - libsoup3
       - glib2
       - cairo
       - fontconfig

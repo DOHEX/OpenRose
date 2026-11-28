@@ -7,10 +7,10 @@ use openrose_circulation::codec::{
 };
 use openrose_circulation::node::{CirculationConfig, CirculationNode as CoreCirculationNode};
 use openrose_circulation::{
-    HandoffStatus, LocalAudio as CoreLocalAudio, NearbyPeer, NearbyPeerRecord, PairingOffer, Peer,
-    PeerDiscovery as CorePeerDiscovery, PeerId, PullOutcome, RemoteError, RemoteReading,
-    RemoteSessionReference, RouteDialer as CoreRouteDialer, RouteStream, WIRE_VERSION,
-    YieldReceipt, YieldRefusal,
+    DiscoveryContract, HandoffStatus, LocalAudio as CoreLocalAudio, NearbyPeer, NearbyPeerRecord,
+    PairingOffer, Peer, PeerDiscovery as CorePeerDiscovery, PeerId, PullOutcome, RemoteError,
+    RemoteReading, RemoteSessionReference, RouteDialer as CoreRouteDialer, RouteStream,
+    WIRE_VERSION, YieldReceipt, YieldRefusal, service_instance_name,
 };
 use openrose_control::codec::CodecError;
 use openrose_headset::HeadsetCommand;
@@ -572,6 +572,16 @@ impl CirculationNode {
             },
         })
     }
+}
+
+#[uniffi::export]
+pub fn circulation_discovery_contract() -> DiscoveryContract {
+    DiscoveryContract::current()
+}
+
+#[uniffi::export]
+pub fn circulation_service_instance_name(peer_id: String) -> String {
+    service_instance_name(&peer_id)
 }
 
 #[uniffi::export]

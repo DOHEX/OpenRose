@@ -92,7 +92,7 @@ OpenRose 已接入 RoseLink 3.8.6 的全部 48 个蓝牙耳机配置，并保留
 
 ## 从源码构建
 
-需要 JDK 21、Rust stable 工具链、[nsh](https://nsh.dev/) 0.7+ 和 Android SDK（Platform 37、Build Tools 37.0.0，设置 `ANDROID_HOME` 或 `local.properties` 的 `sdk.dir`）。构建 Android APK 还需 `aarch64-linux-android`、`armv7-linux-androideabi`、`x86_64-linux-android` 三个目标与 `cargo-ndk`；打包 Linux 桌面端还需 `nfpm`、`appimagetool` 以及 GTK 4.14+、GStreamer 和 D-Bus 开发库（`libgtk-4-dev`、`libgstreamer1.0-dev`、`libgstreamer-plugins-base1.0-dev`、`libdbus-1-dev`、`pkg-config`）。开发环境、各项检查与提交规范见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+需要 JDK 21、Rust stable 工具链、[nsh](https://nsh.dev/) 0.7+ 和 Android SDK（Platform 37、Build Tools 37.0.0，设置 `ANDROID_HOME` 或 `local.properties` 的 `sdk.dir`）。构建 Android APK 还需 `aarch64-linux-android`、`armv7-linux-androideabi`、`x86_64-linux-android` 三个目标与 `cargo-ndk`；打包 Linux 桌面端还需 `nfpm`、`appimagetool` 以及 GTK 4.14+、GStreamer 和 D-Bus 开发库（`libgtk-4-dev`、`libwebkitgtk-6.0-dev`、`libgstreamer1.0-dev`、`libgstreamer-plugins-base1.0-dev`、`libdbus-1-dev`、`pkg-config`）。开发环境、各项检查与提交规范见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ```bash
 ./gradlew :androidApp:assembleDebug   # Android 调试 APK

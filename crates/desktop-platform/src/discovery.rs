@@ -2,7 +2,8 @@ use async_trait::async_trait;
 use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo, TxtProperties};
 use openrose_circulation::{
     MAX_ADVERTISED_NAME_LEN, MDNS_SERVICE_TYPE, NearbyPeer, PeerDiscovery, PeerId, RemoteError,
-    WIRE_VERSION, advertised_addresses, filter_resolved_addresses,
+    TXT_KEY_ID, TXT_KEY_NAME, TXT_KEY_VERSION, WIRE_VERSION, advertised_addresses,
+    filter_resolved_addresses, service_instance_name,
 };
 use std::collections::BTreeMap;
 use std::fmt;
@@ -50,19 +51,19 @@ pub(crate) fn encode_txt_properties(
     version: u32,
 ) -> Vec<(String, String)> {
     vec![
-        ("id".to_string(), id.as_str().to_string()),
-        ("name".to_string(), truncate_advertised_name(name)),
-        ("v".to_string(), version.to_string()),
+        (TXT_KEY_ID.to_string(), id.as_str().to_string()),
+        (TXT_KEY_NAME.to_string(), truncate_advertised_name(name)),
+        (TXT_KEY_VERSION.to_string(), version.to_string()),
     ]
 }
 
 pub(crate) fn decode_txt_properties(props: &TxtProperties) -> Option<AdvertisedPeer> {
     let id = props
-        .get_property_val_str("id")
+        .get_property_val_str(TXT_KEY_ID)
         .map(str::trim)
         .filter(|s| !s.is_empty())?;
-    let name = props.get_property_val_str("name")?;
-    let version = props.get_property_val_str("v")?.trim().parse::<u32>().ok()?;
+    let name = props.get_property_val_str(TXT_KEY_NAME)?;
+    let version = props.get_property_val_str(TXT_KEY_VERSION)?.trim().parse::<u32>().ok()?;
     Some(AdvertisedPeer {
         id: PeerId::new(id),
         name: truncate_advertised_name(name),
@@ -193,15 +194,6 @@ impl Drop for MdnsDiscovery {
     }
 }
 
-fn instance_name_for(id: &PeerId) -> String {
-    let prefix: String = id.as_str().chars().take(20).collect();
-    if prefix.is_empty() {
-        "OpenRose".to_string()
-    } else {
-        format!("OpenRose-{prefix}")
-    }
-}
-
 fn host_name_for(id: &PeerId) -> String {
     let sanitized: String = id
         .as_str()
@@ -235,7 +227,7 @@ impl PeerDiscovery for MdnsDiscovery {
         let props = encode_txt_properties(id, name, WIRE_VERSION);
         let service_info = ServiceInfo::new(
             MDNS_SERVICE_TYPE,
-            &instance_name_for(id),
+            &service_instance_name(id.as_str()),
             &host_name_for(id),
             &addresses[..],
             port,

@@ -14,6 +14,42 @@ pub const WIRE_VERSION: u32 = 1;
 pub const DEFAULT_PORT: u16 = 21871;
 pub const MDNS_SERVICE_TYPE: &str = "_openrose._tcp.local.";
 pub const MAX_ADVERTISED_NAME_LEN: usize = 60;
+pub const TXT_KEY_ID: &str = "id";
+pub const TXT_KEY_NAME: &str = "name";
+pub const TXT_KEY_VERSION: &str = "v";
+const SERVICE_NAME_PREFIX: &str = "OpenRose";
+const SERVICE_NAME_ID_LEN: usize = 20;
+
+pub fn service_instance_name(peer_id: &str) -> String {
+    let short: String = peer_id.chars().take(SERVICE_NAME_ID_LEN).collect();
+    if short.is_empty() {
+        SERVICE_NAME_PREFIX.to_string()
+    } else {
+        format!("{SERVICE_NAME_PREFIX}-{short}")
+    }
+}
+
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiscoveryContract {
+    pub service_type: String,
+    pub max_name_len: u32,
+    pub txt_key_id: String,
+    pub txt_key_name: String,
+    pub txt_key_version: String,
+}
+
+impl DiscoveryContract {
+    pub fn current() -> Self {
+        Self {
+            service_type: MDNS_SERVICE_TYPE.to_string(),
+            max_name_len: MAX_ADVERTISED_NAME_LEN as u32,
+            txt_key_id: TXT_KEY_ID.to_string(),
+            txt_key_name: TXT_KEY_NAME.to_string(),
+            txt_key_version: TXT_KEY_VERSION.to_string(),
+        }
+    }
+}
 
 pub const REMOTE_CONTROL_SETTINGS: &[HeadsetSetting] = &[
     HeadsetSetting::NoiseMode,

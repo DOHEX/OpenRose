@@ -94,7 +94,7 @@ See [Desktop](https://dohex.github.io/OpenRose/en/guides/desktop/) for full deta
 
 ## Building from source
 
-Requires JDK 21, the stable Rust toolchain, [nsh](https://nsh.dev/) 0.7+, and the Android SDK (Platform 37, Build Tools 37.0.0; set `ANDROID_HOME` or `sdk.dir` in `local.properties`). Building the Android APK also requires the `aarch64-linux-android`, `armv7-linux-androideabi` and `x86_64-linux-android` targets and `cargo-ndk`; packaging the Linux desktop app also requires `nfpm`, `appimagetool`, and the GTK 4.14+, GStreamer, and D-Bus development libraries (`libgtk-4-dev`, `libgstreamer1.0-dev`, `libgstreamer-plugins-base1.0-dev`, `libdbus-1-dev`, `pkg-config`). For the development environment, checks, and commit conventions, see [CONTRIBUTING.md](CONTRIBUTING.md) (Chinese).
+Requires JDK 21, the stable Rust toolchain, [nsh](https://nsh.dev/) 0.7+, and the Android SDK (Platform 37, Build Tools 37.0.0; set `ANDROID_HOME` or `sdk.dir` in `local.properties`). Building the Android APK also requires the `aarch64-linux-android`, `armv7-linux-androideabi` and `x86_64-linux-android` targets and `cargo-ndk`; packaging the Linux desktop app also requires `nfpm`, `appimagetool`, and the GTK 4.14+, GStreamer, and D-Bus development libraries (`libgtk-4-dev`, `libwebkitgtk-6.0-dev`, `libgstreamer1.0-dev`, `libgstreamer-plugins-base1.0-dev`, `libdbus-1-dev`, `pkg-config`). For the development environment, checks, and commit conventions, see [CONTRIBUTING.md](CONTRIBUTING.md) (Chinese).
 
 ```bash
 ./gradlew :androidApp:assembleDebug   # Android debug APK

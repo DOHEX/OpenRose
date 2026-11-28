@@ -347,7 +347,7 @@ jobs:
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes libgtk-4-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libdbus-1-dev pkg-config
+          sudo apt-get install --yes libgtk-4-dev libwebkitgtk-6.0-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libdbus-1-dev pkg-config
 
       - name: Build Linux packages
         env:
@@ -365,6 +365,7 @@ jobs:
             (cd /pkg && apt-get install --yes ./openrose_*.deb)
             command -v openrose
             test -x "$(command -v openrose)"
+            ! ldd "$(readlink -f "$(command -v openrose)")" 2>&1 | grep 'not found'
             test -f /usr/share/applications/io.github.dohex.openrose.desktop
             test -f /usr/share/icons/hicolor/512x512/apps/io.github.dohex.openrose.png
           '
