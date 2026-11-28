@@ -7,6 +7,7 @@ import io.github.dohex.openrose.androidintegration.HostCallResult
 import io.github.dohex.openrose.androidintegration.HostCommand
 import io.github.dohex.openrose.androidintegration.HostLease
 import io.github.dohex.openrose.androidintegration.HostOpenResult
+import io.github.dohex.openrose.androidintegration.HostPlatformFacts
 import io.github.dohex.openrose.androidintegration.HostRejection
 import io.github.dohex.openrose.androidintegration.HostStatus
 import io.github.dohex.openrose.androidintegration.OwnerGeneration

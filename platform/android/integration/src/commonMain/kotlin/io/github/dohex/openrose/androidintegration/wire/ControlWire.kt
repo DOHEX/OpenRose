@@ -1,5 +1,6 @@
 package io.github.dohex.openrose.androidintegration.wire
 
+import io.github.dohex.openrose.androidintegration.HostPlatformFacts
 import io.github.dohex.openrose.core.ControlError
 import io.github.dohex.openrose.core.ControlErrorCode
 import io.github.dohex.openrose.core.ControlState
@@ -11,12 +12,6 @@ import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.TouchBinding
 import io.github.dohex.openrose.core.transport.DeviceId
 import kotlinx.collections.immutable.toPersistentList
-
-data class HostPlatformFacts(
-    val permission: PermissionState,
-    val transport: TransportAvailability,
-    val scanPermission: PermissionState = PermissionState.NOT_REQUIRED,
-)
 
 data class OwnedControlState(val platform: HostPlatformFacts, val state: ControlState)
 

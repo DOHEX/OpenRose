@@ -3,6 +3,7 @@ package io.github.dohex.openrose.androidintegration.wire
 import io.github.dohex.openrose.androidintegration.BridgeIpcState
 import io.github.dohex.openrose.androidintegration.HostFacts
 import io.github.dohex.openrose.androidintegration.HostFrame
+import io.github.dohex.openrose.androidintegration.HostPlatformFacts
 import io.github.dohex.openrose.androidintegration.IslandPrompt
 import io.github.dohex.openrose.androidintegration.PresentationReading
 import io.github.dohex.openrose.androidintegration.SystemBatteryState
@@ -10,27 +11,65 @@ import io.github.dohex.openrose.androidintegration.SystemEndpointDiagnostics
 import io.github.dohex.openrose.androidintegration.SystemNoiseState
 import io.github.dohex.openrose.androidintegration.SystemPresentationState
 import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.ffi.CoreDecodeResult
+import io.github.dohex.openrose.ffi.decodeControlSnapshot
+import io.github.dohex.openrose.ffi.encodeToBytes
+import uniffi.openrose_control.ControlSnapshot
+import kotlin.io.encoding.Base64
+
+class HostSnapshotFormatException(val error: CoreDecodeResult.Error) : WireFormatException(
+    when (error) {
+        is CoreDecodeResult.Error.Malformed -> "宿主状态快照损坏：${error.detail}"
+        is CoreDecodeResult.Error.UnsupportedVersion -> "宿主状态快照版本不兼容：期望 ${error.expected}，实际 ${error.actual}"
+    },
+)
 
 object HostFrameWire {
     fun encode(frame: HostFrame): Wire = obj(
         "generation" to HostIdentityWire.encode(frame.generation),
         "holder" to HostIdentityWire.encode(frame.holder),
-        "owned" to ControlWire.encodeOwned(frame.platform, frame.state),
+        "platform" to encodePlatform(frame.platform),
+        "snapshot" to str(Base64.encode(frame.snapshot.encodeToBytes())),
         "presentation" to encodePresentation(frame.presentation),
         "facts" to encode(frame.facts),
     )
 
     fun decodeFrame(wire: Wire): HostFrame {
         val node = wire.asObj()
-        val owned = ControlWire.decodeOwned(node.field("owned"))
         return HostFrame(
             HostIdentityWire.decodeGeneration(node.field("generation")),
             HostIdentityWire.decodeHolder(node.field("holder")),
-            owned.platform,
-            owned.state,
+            decodePlatform(node.field("platform")),
+            decodeSnapshot(node.str("snapshot")),
             decodePresentation(node.field("presentation")),
             decodeFacts(node.field("facts")),
         )
+    }
+
+    private fun encodePlatform(platform: HostPlatformFacts): Wire = obj(
+        "permission" to Wire.Str(platform.permission.name),
+        "scanPermission" to Wire.Str(platform.scanPermission.name),
+        "transport" to encode(platform.transport),
+    )
+
+    private fun decodePlatform(wire: Wire): HostPlatformFacts = wire.asObj().let { node ->
+        HostPlatformFacts(
+            node.field("permission").asEnum(),
+            decodeTransport(node.field("transport")),
+            node.field("scanPermission").asEnum(),
+        )
+    }
+
+    private fun decodeSnapshot(encoded: String): ControlSnapshot {
+        val bytes = try {
+            Base64.decode(encoded)
+        } catch (failure: IllegalArgumentException) {
+            throw WireFormatException("宿主状态快照编码无效", failure)
+        }
+        return when (val decoded = decodeControlSnapshot(bytes)) {
+            is CoreDecodeResult.Ok -> decoded.value
+            is CoreDecodeResult.Error -> throw HostSnapshotFormatException(decoded)
+        }
     }
 
     private fun encodePresentation(state: SystemPresentationState): Wire = obj(

@@ -1,6 +1,5 @@
 package io.github.dohex.openrose.androidintegration
 
-import io.github.dohex.openrose.androidintegration.wire.HostPlatformFacts
 import io.github.dohex.openrose.core.ControlError
 import io.github.dohex.openrose.core.ControlErrorCode
 import io.github.dohex.openrose.core.ControlRuntime
@@ -34,6 +33,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import uniffi.openrose_control.ControlSnapshot
 
 data class HostConfiguration(
     val userUnlocked: Boolean = false,
@@ -65,6 +65,7 @@ class ModuleControlHost(
         val holder: OwnerHolder,
         val job: Job,
         val runtime: SystemEntryRuntime,
+        val coreState: StateFlow<ControlSnapshot>,
         val ended: CompletableDeferred<Unit> = CompletableDeferred(),
     ) {
         val commands = MutableStateFlow<Job>(SupervisorJob(job))
@@ -227,7 +228,7 @@ class ModuleControlHost(
             }
             return callbackFlow {
                 val collector = launch {
-                    combine(active.runtime.views(active.generation), facts) { view, reported ->
+                    combine(active.runtime.views(active.generation), active.coreState, facts) { view, snapshot, reported ->
                         HostFrame(
                             view.generation,
                             active.holder,
@@ -236,7 +237,7 @@ class ModuleControlHost(
                                 view.state.platform.transport,
                                 view.state.platform.scanPermission,
                             ),
-                            view.state,
+                            snapshot,
                             view.presentation,
                             reported,
                         )
@@ -400,16 +401,17 @@ class ModuleControlHost(
             val generation = OwnerGeneration(incarnation, sequence)
             val job = SupervisorJob(hostContext[Job])
             val scope = CoroutineScope(hostContext + job)
+            val backed = runtimeFactory(scope, configuration.settings.control, platform, SessionIdBase.module(sequence)).also {
+                onOwnerStarted(generation, scope, it)
+            }
             val runtime = SystemEntryRuntime(
-                runtimeFactory(scope, configuration.settings.control, platform, SessionIdBase.module(sequence)).also {
-                    onOwnerStarted(generation, scope, it)
-                },
+                backed,
                 scope,
                 presentationTiming,
                 configuration.settings.integration,
             )
             val holder = OwnerHolder(ControlWay.MODULE, generation, packageName, processName, uid, pid)
-            owner.value = Owner(generation, holder, job, runtime)
+            owner.value = Owner(generation, holder, job, runtime, backed.coreState)
         }
 
         suspend fun stop(current: Owner): Boolean {

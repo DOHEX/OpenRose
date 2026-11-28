@@ -4,6 +4,7 @@ import io.github.dohex.openrose.androidintegration.wire.HandoffWire
 import io.github.dohex.openrose.androidintegration.wire.HostFrameWire
 import io.github.dohex.openrose.androidintegration.wire.HostIdentityWire
 import io.github.dohex.openrose.androidintegration.wire.HostWire
+import io.github.dohex.openrose.androidintegration.wire.WireFormatException
 import io.github.dohex.openrose.androidintegration.wire.parseWire
 import io.github.dohex.openrose.androidintegration.wire.render
 import io.github.dohex.openrose.core.DeviceCandidate
@@ -108,6 +109,7 @@ internal class InProcessHostLink(
     var statusHangs = false
 
     var tamperReceipt: (ReleaseReceipt) -> ReleaseReceipt = { it }
+    var tamperFrame: (String) -> String = { it }
     val connections = mutableListOf<Connection>()
 
     var openMillis = 0L
@@ -180,7 +182,12 @@ internal class InProcessHostLink(
 
         override fun frames(generation: OwnerGeneration): Flow<HostFrame> = host.control.frames(identity, lease.id, generation).map { frame ->
             ensureOpen()
-            HostFrameWire.decodeFrame(parseWire(HostFrameWire.encode(frame).render()))
+            val wire = tamperFrame(HostFrameWire.encode(frame).render())
+            try {
+                HostFrameWire.decodeFrame(parseWire(wire))
+            } catch (failure: WireFormatException) {
+                throw HostLinkException("宿主返回了无法识别的状态帧", failure)
+            }
         }
 
         override fun close() {
