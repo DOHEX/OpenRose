@@ -37,12 +37,6 @@ class NativeHeadsetDirectory(private val now: () -> Long) {
         return synchronized(lock) { normalized in managed }
     }
 
-    fun clear() = synchronized(lock) {
-        current = null
-        bonded = emptySet()
-        managed.clear()
-    }
-
     companion object {
         const val BINDER_AUDIO_SWITCH = "1"
         const val BINDER_SUPPORT_MASK = "${NativeHeadsetSnapshot.MILINK_COMPATIBILITY_DEVICE_ID},000000000000000010000000"

@@ -27,17 +27,14 @@ class MiLinkNativeHeadsetAdapter(
 
     private val hooks = NativeHeadsetHooks(module, classLoader, callbacks, reportFeature, TAG, "milink")
     private val directory = NativeHeadsetDirectory(SystemClock::elapsedRealtime)
-    private val updates = MiLinkPropertyUpdates(directory, hooks, module) { closed }
+    private val updates = MiLinkPropertyUpdates(directory, hooks, module)
     private val deviceMethods = DeviceMethods()
     private val info = HeadsetInfo()
-
-    @Volatile private var closed = false
 
     val handles: List<XposedInterface.HookHandle> get() = hooks.handles
 
     @Synchronized
     fun install(): List<XposedInterface.HookHandle> {
-        if (closed) return handles
         deviceMethods.installMxBluetooth("com.xiaomi.mxbluetoothsdk.manager.MxBluetoothManager")
         deviceMethods.installMxBluetooth("com.xiaomi.mxbluetoothsdk.service.MxBluetoothService")
         deviceMethods.installProfileContext()
@@ -49,21 +46,10 @@ class MiLinkNativeHeadsetAdapter(
 
     fun publish(snapshot: NativeHeadsetSnapshot?) = updates.publish(directory.publishSession(snapshot))
 
-    fun publishBonded(addresses: Set<String>) {
-        if (!closed) directory.publishBonded(addresses)
-    }
-
-    @Synchronized
-    fun close() {
-        if (closed) return
-        closed = true
-        hooks.close()
-        directory.clear()
-        updates.close()
-    }
+    fun publishBonded(addresses: Set<String>) = directory.publishBonded(addresses)
 
     private fun submit(snapshot: NativeHeadsetSnapshot, mode: String, address: String?): Boolean {
-        val current = { if (closed) null else directory.current() }
+        val current = { directory.current() }
         return hooks.submitNoise(snapshot, mode, address, current)
     }
 

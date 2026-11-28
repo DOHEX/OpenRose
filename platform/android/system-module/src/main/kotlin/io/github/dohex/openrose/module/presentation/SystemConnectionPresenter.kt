@@ -14,49 +14,21 @@ internal class SystemConnectionPresenter(
     context: Context,
     private val handler: Handler,
     private val callbacks: PresentationCallbacks,
-) : AutoCloseable {
+) {
     private val targetContext = context.applicationContext ?: context
     private var active: ActiveToast? = null
     private val media = SystemPromptMedia(targetContext, handler)
 
-    @Volatile private var closed = false
-
     fun show(snapshot: Bundle, native: NativeHeadsetSnapshot, promptId: String) {
-        handler.dispatch {
-            if (!closed) showOnHandler(Bundle(snapshot), native, promptId)
-        }
+        handler.dispatch { showOnHandler(Bundle(snapshot), native, promptId) }
     }
 
     fun withdraw(snapshot: Bundle?, promptId: String? = null, reason: String = "prompt_cancelled") {
         val copy = snapshot?.let(::Bundle)
-        handler.dispatch {
-            if (!closed) withdrawOnHandler(copy, promptId, reason)
-        }
+        handler.dispatch { withdrawOnHandler(copy, promptId, reason) }
     }
 
     fun clear(snapshot: Bundle? = null) = withdraw(snapshot, reason = "presenter_clear")
-
-    override fun close() {
-        if (Looper.myLooper() === handler.looper) {
-            closeOnHandler()
-        } else if (!handler.post { closeOnHandler() }) {
-            closed = true
-            media.close()
-        }
-    }
-
-    private fun closeOnHandler() {
-        if (closed) {
-            media.close()
-            return
-        }
-        closed = true
-        try {
-            withdrawOnHandler(snapshot = null, promptId = null, reason = "presenter_close")
-        } finally {
-            media.close()
-        }
-    }
 
     private fun showOnHandler(snapshot: Bundle, native: NativeHeadsetSnapshot, promptId: String) {
         val request = decodeRequest(snapshot, native, promptId)

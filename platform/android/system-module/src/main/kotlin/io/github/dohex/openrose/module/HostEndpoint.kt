@@ -191,7 +191,6 @@ internal class HostEndpoint(
     override fun release(request: Bundle): Bundle = application.release(request)
     override fun acquire(request: Bundle): Bundle = application.acquire(request)
     override fun watchFrames(request: Bundle, frames: IControlFrames): Bundle = application.watchFrames(request, frames)
-    fun shutdown() = leaseTable.shutdown()
 
     private inner class EndpointLeases {
         private fun caller(): CallerIdentity {
@@ -302,10 +301,6 @@ internal class HostEndpoint(
         fun close(leaseId: String) {
             val lease = lease(leaseId)
             synchronized(lock) { dropLease(lease.id) }
-        }
-
-        fun shutdown() {
-            synchronized(lock) { leases.keys.toList().forEach(::dropLease) }
         }
 
         private fun dropLease(leaseId: String) {
